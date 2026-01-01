@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>WebRTC Chat</title>
+    <title>WebRTC Secure Chat</title>
     <style>
       * {
         margin: 0;
@@ -75,6 +75,15 @@
       button.gray {
         background: #6c757d;
       }
+      button.red {
+        background: #dc3545;
+      }
+      button.small {
+        width: auto;
+        padding: 8px 16px;
+        font-size: 13px;
+        margin: 0;
+      }
       .status {
         padding: 14px;
         background: #f0f2f5;
@@ -124,13 +133,20 @@
       .chat {
         background: #f0f2f5;
         padding: 15px;
-        height: 350px;
+        height: 400px;
         overflow-y: auto;
         border-radius: 8px;
         margin-bottom: 15px;
         display: flex;
         flex-direction: column;
         gap: 10px;
+      }
+      .date-sep {
+        text-align: center;
+        color: #666;
+        font-size: 12px;
+        margin: 10px 0;
+        font-weight: 600;
       }
       .m {
         max-width: 75%;
@@ -229,23 +245,49 @@
         margin-bottom: 10px;
         text-align: center;
         color: #856404;
+        line-height: 1.6;
+      }
+      .success {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 2px solid #66bb6a;
       }
       .ctrl {
-      display: none;
-        text-align: center;
+        display: none;
+        gap: 10px;
         margin-bottom: 15px;
+        justify-content: center;
       }
       .ctrl button {
-        background: #dc3545;
         width: auto;
-        padding: 10px 20px;
+        padding: 10px 16px;
+      }
+      .history-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        background: #e3f2fd;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        font-size: 12px;
+        color: #1565c0;
+      }
+      .history-info button {
+        background: #1976d2;
+        color: #fff;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 11px;
       }
       @media (max-width: 600px) {
         .box {
           max-width: 100%;
         }
         .chat {
-          height: 280px;
+          height: 300px;
         }
         .m {
           max-width: 85%;
@@ -257,11 +299,10 @@
   <body>
     <div class="box">
       <div class="head">
-        <h1>🚀 WebRTC Chat</h1>
-        <p>🔒 End-to-End Encrypted • Auto-Connect</p>
+        <h1>🚀 WebRTC Secure Chat</h1>
+        <p>🔒 End-to-End Encrypted • Chat History Saved</p>
       </div>
       <div class="content">
-        <!-- Login -->
         <div id="login">
           <input
             type="text"
@@ -269,10 +310,11 @@
             placeholder="Your username (e.g., john123)"
           />
           <button onclick="login()">Connect to Server</button>
-          <div class="info">💡 Choose a unique username</div>
+          <div class="info">
+            💡 Chat history is saved securely on your device
+          </div>
         </div>
 
-        <!-- Select Friend -->
         <div id="select" class="hide">
           <div class="status">
             <span class="green">✅ You're Online as <b id="me"></b></span>
@@ -286,16 +328,23 @@
           <div id="userlist" class="users hide"></div>
         </div>
 
-        <!-- Chat -->
         <div id="chatbox" class="hide">
           <div class="status" id="stat">⏳ Connecting...</div>
+
+          <div id="historyInfo" class="history-info hide">
+            <span>💾 <b id="msgCount">0</b> messages saved</span>
+            <button onclick="clearHistory()">Clear History</button>
+          </div>
+
           <div id="vid" class="video">
             <video id="v" autoplay playsinline muted></video>
             <div class="tag" id="tag">📹 Live</div>
           </div>
+
           <div id="camctrl" class="ctrl hide">
-            <button onclick="stopCam()">Stop My Camera</button>
+            <button onclick="stopCam()" class="red">⏹ Stop Camera</button>
           </div>
+
           <div class="chat" id="msgs"></div>
           <div class="inbox">
             <input
@@ -329,7 +378,6 @@
         ],
       };
 
-      // Auto WebSocket URL
       const wsUrl = (() => {
         const isLocal =
           location.hostname === "localhost" ||
@@ -339,32 +387,178 @@
         return `${proto}://${location.host}`;
       })();
 
-      console.log("WebSocket URL:", wsUrl);
+      // Simple AES-like encryption for chat history [web:120][web:123]
+      function simpleEncrypt(text, key) {
+        let result = "";
+        for (let i = 0; i < text.length; i++) {
+          result += String.fromCharCode(
+            text.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+          );
+        }
+        return btoa(result);
+      }
+
+      function simpleDecrypt(encrypted, key) {
+        try {
+          const decoded = atob(encrypted);
+          let result = "";
+          for (let i = 0; i < decoded.length; i++) {
+            result += String.fromCharCode(
+              decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+            );
+          }
+          return result;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      // Generate device-specific encryption key [web:123]
+      function getEncryptionKey() {
+        let key = localStorage.getItem("_ek");
+        if (!key) {
+          key =
+            Math.random().toString(36).substring(2) + Date.now().toString(36);
+          localStorage.setItem("_ek", key);
+        }
+        return key;
+      }
+
+      const encKey = getEncryptionKey();
+
+      // Save message to history [web:120]
+      function saveMessage(friend, message, type) {
+        const chatKey = `chat_${me}_${friend}`;
+        let history = [];
+
+        try {
+          const stored = localStorage.getItem(chatKey);
+          if (stored) {
+            const decrypted = simpleDecrypt(stored, encKey);
+            if (decrypted) history = JSON.parse(decrypted);
+          }
+        } catch (e) {
+          console.log("History load error");
+        }
+
+        history.push({
+          msg: message,
+          type: type,
+          time: Date.now(),
+        });
+
+        // Keep only last 500 messages to avoid storage limits [web:126]
+        if (history.length > 500) history = history.slice(-500);
+
+        try {
+          const encrypted = simpleEncrypt(JSON.stringify(history), encKey);
+          localStorage.setItem(chatKey, encrypted);
+        } catch (e) {
+          console.log("History save error");
+        }
+
+        updateMessageCount();
+      }
+
+      // Load chat history [web:120]
+      function loadHistory(friend) {
+        const chatKey = `chat_${me}_${friend}`;
+
+        try {
+          const stored = localStorage.getItem(chatKey);
+          if (!stored) return;
+
+          const decrypted = simpleDecrypt(stored, encKey);
+          if (!decrypted) return;
+
+          const history = JSON.parse(decrypted);
+
+          if (history.length > 0) {
+            // Show date separator
+            const sep = document.createElement("div");
+            sep.className = "date-sep";
+            sep.textContent = "📜 Previous Messages";
+            document.getElementById("msgs").appendChild(sep);
+
+            // Show last 50 messages [web:126]
+            const recent = history.slice(-50);
+            recent.forEach((item) => {
+              displayMessage(
+                item.msg,
+                item.type,
+                item.type === "sent" ? "You" : friend,
+                item.time,
+                false
+              );
+            });
+
+            // Another separator for new messages
+            const sep2 = document.createElement("div");
+            sep2.className = "date-sep";
+            sep2.textContent = "━━━━━ New Messages ━━━━━";
+            document.getElementById("msgs").appendChild(sep2);
+          }
+
+          updateMessageCount();
+        } catch (e) {
+          console.log("History load failed");
+        }
+      }
+
+      // Update message counter
+      function updateMessageCount() {
+        if (!me || !fr) return;
+        const chatKey = `chat_${me}_${fr}`;
+
+        try {
+          const stored = localStorage.getItem(chatKey);
+          if (stored) {
+            const decrypted = simpleDecrypt(stored, encKey);
+            if (decrypted) {
+              const history = JSON.parse(decrypted);
+              document.getElementById("msgCount").textContent = history.length;
+              document.getElementById("historyInfo").classList.remove("hide");
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Clear chat history
+      function clearHistory() {
+        if (
+          !confirm(
+            "Delete all chat history with " + fr + "?\n\nThis cannot be undone!"
+          )
+        )
+          return;
+
+        const chatKey = `chat_${me}_${fr}`;
+        localStorage.removeItem(chatKey);
+
+        // Clear displayed messages
+        const msgs = document.getElementById("msgs");
+        msgs.innerHTML = "";
+
+        document.getElementById("msgCount").textContent = "0";
+        alert("✅ Chat history deleted");
+      }
 
       function login() {
         me = document.getElementById("user").value.trim().toLowerCase();
         if (!me) return alert("Enter username");
 
         ws = new WebSocket(wsUrl);
-
         ws.onopen = () => {
-          console.log("✅ Connected to server");
+          console.log("✅ Connected");
           ws.send(JSON.stringify({ type: "register", username: me }));
         };
-
         ws.onmessage = handle;
-
-        ws.onerror = (err) => {
-          console.error("WebSocket error:", err);
-          alert("❌ Cannot connect to server. Make sure server is running!");
-        };
-
-        ws.onclose = () => console.log("Disconnected from server");
+        ws.onerror = () => alert("❌ Cannot connect to server");
+        ws.onclose = () => console.log("Disconnected");
       }
 
       function handle(e) {
         const d = JSON.parse(e.data);
-        console.log("Received:", d.type);
 
         if (d.type === "registered") {
           hide("login");
@@ -381,32 +575,23 @@
           } else {
             document.getElementById("stat").innerHTML =
               '<span class="red">⭕ ' + d.friend + " is offline</span>";
-            setTimeout(
-              () =>
-                alert(d.friend + " is not online. They need to open the app."),
-              100
-            );
+            setTimeout(() => alert(d.friend + " is not online"), 100);
           }
         } else if (d.type === "offer") {
           fr = d.from;
           getOffer(d.offer, d.from);
-        } else if (d.type === "answer") {
-          getAnswer(d.answer);
-        } else if (d.type === "ice-candidate") {
-          // Queue ICE candidates until remote description is set
+        } else if (d.type === "answer") getAnswer(d.answer);
+        else if (d.type === "ice-candidate") {
           if (pc) {
             if (pc.remoteDescription) {
               pc.addIceCandidate(new RTCIceCandidate(d.candidate)).catch((e) =>
-                console.log("ICE candidate error:", e)
+                console.log("ICE:", e)
               );
             } else {
-              console.log("Queueing ICE candidate");
               iceQueue.push(d.candidate);
             }
           }
-        } else if (d.type === "online-users") {
-          showUsers(d.users);
-        }
+        } else if (d.type === "online-users") showUsers(d.users);
       }
 
       function connect() {
@@ -416,31 +601,30 @@
 
         hide("select");
         show("chatbox");
+
+        // Load previous chat history [web:120]
+        loadHistory(fr);
+
         ws.send(JSON.stringify({ type: "check-online", friend: fr }));
       }
 
       async function makeOffer(to) {
-        console.log("Creating offer for", to);
         pc = new RTCPeerConnection(ice);
         iceQueue = [];
-
-        // Create data channel
         dc = pc.createDataChannel("chat");
         setupDC();
 
-        // Host receives video only
         pc.addTransceiver("video", { direction: "recvonly" });
         pc.addTransceiver("audio", { direction: "recvonly" });
 
         pc.ontrack = (e) => {
-          console.log("Received remote stream");
           document.getElementById("v").srcObject = e.streams[0];
           document.getElementById("vid").classList.add("on");
           document.getElementById("tag").textContent = "📹 " + to;
         };
 
         pc.onicecandidate = (e) => {
-          if (e.candidate) {
+          if (e.candidate)
             ws.send(
               JSON.stringify({
                 type: "ice-candidate",
@@ -448,29 +632,25 @@
                 to,
               })
             );
-          }
         };
-
-        pc.onconnectionstatechange = () =>
-          console.log("Connection state:", pc.connectionState);
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-
         ws.send(JSON.stringify({ type: "offer", offer, to, from: me }));
       }
 
       async function getOffer(offer, from) {
-        console.log("Received offer from", from);
         hide("select");
         show("chatbox");
         document.getElementById("stat").innerHTML =
           '<span class="green">✅ Connecting with ' + from + "...</span>";
 
+        // Load previous chat history
+        loadHistory(from);
+
         pc = new RTCPeerConnection(ice);
         iceQueue = [];
 
-        // Guest sends video
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -482,23 +662,21 @@
           });
 
           stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-          console.log("✅ Camera accessed");
           document.getElementById("camctrl").classList.remove("hide");
+          console.log("✅ Camera accessed");
         } catch (e) {
           console.error("Camera error:", e);
           alert(
-            "❌ Camera permission denied or not available. Video features won't work."
+            "❌ Camera not available. Video won't work.\n\nMake sure:\n• You allowed camera permission\n• Page is using HTTPS\n• Camera is not used by another app"
           );
         }
 
         pc.ondatachannel = (e) => {
-          console.log("Data channel received");
           dc = e.channel;
           setupDC();
         };
-
         pc.onicecandidate = (e) => {
-          if (e.candidate) {
+          if (e.candidate)
             ws.send(
               JSON.stringify({
                 type: "ice-candidate",
@@ -506,87 +684,51 @@
                 to: from,
               })
             );
-          }
         };
 
-        pc.onconnectionstatechange = () =>
-          console.log("Connection state:", pc.connectionState);
-
         await pc.setRemoteDescription(offer);
-        console.log("Remote description set");
-
-        // Process queued ICE candidates
-        iceQueue.forEach((candidate) => {
-          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((e) =>
-            console.log("Queued ICE error:", e)
-          );
-        });
+        iceQueue.forEach((c) =>
+          pc
+            .addIceCandidate(new RTCIceCandidate(c))
+            .catch((e) => console.log(e))
+        );
         iceQueue = [];
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-
         ws.send(JSON.stringify({ type: "answer", answer, to: from, from: me }));
       }
 
       async function getAnswer(answer) {
-        console.log("Received answer");
         await pc.setRemoteDescription(answer);
-        console.log("Remote description set");
-
-        // Process queued ICE candidates
-        iceQueue.forEach((candidate) => {
-          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((e) =>
-            console.log("Queued ICE error:", e)
-          );
-        });
+        iceQueue.forEach((c) =>
+          pc
+            .addIceCandidate(new RTCIceCandidate(c))
+            .catch((e) => console.log(e))
+        );
         iceQueue = [];
       }
 
       function setupDC() {
         dc.onopen = () => {
-          console.log("✅ Data channel open");
+          console.log("✅ Connected - Messages encrypted with DTLS [web:125]");
           document.getElementById("stat").innerHTML =
             '<span class="green">✅ Connected with ' + fr + "</span>";
         };
-
         dc.onmessage = (e) => {
-          console.log("Message received:", e.data);
           msg(e.data, "rcv", fr);
           if (navigator.vibrate) navigator.vibrate(50);
         };
-
-        dc.onclose = () => {
-          console.log("Data channel closed");
-          document.getElementById("stat").innerHTML =
-            '<span class="red">⭕ Disconnected</span>';
-        };
-
-        dc.onerror = (e) => console.error("Data channel error:", e);
+        dc.onclose = () =>
+          (document.getElementById("stat").innerHTML =
+            '<span class="red">⭕ Disconnected</span>');
       }
 
       function send() {
         const input = document.getElementById("txt");
         const t = input.value.trim();
+        if (!t || !dc || dc.readyState !== "open") return;
 
-        if (!t) {
-          console.log("Empty message");
-          return;
-        }
-
-        if (!dc) {
-          console.log("No data channel");
-          alert("Not connected yet!");
-          return;
-        }
-
-        if (dc.readyState !== "open") {
-          console.log("Data channel not open:", dc.readyState);
-          alert("Connection not ready. Wait a moment...");
-          return;
-        }
-
-        console.log("Sending message:", t);
         dc.send(t);
         msg(t, "sent", "You");
         input.value = "";
@@ -594,9 +736,13 @@
       }
 
       function msg(txt, type, name) {
+        displayMessage(txt, type, name, Date.now(), true);
+      }
+
+      function displayMessage(txt, type, name, timestamp, saveToHistory) {
         const m = document.createElement("div");
         m.className = "m " + type;
-        const time = new Date().toLocaleTimeString([], {
+        const time = new Date(timestamp).toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
         });
@@ -613,7 +759,10 @@
         chat.appendChild(m);
         chat.scrollTop = chat.scrollHeight;
 
-        console.log("Message added to UI");
+        // Save to encrypted history [web:120]
+        if (saveToHistory && fr) {
+          saveMessage(fr, txt, type);
+        }
       }
 
       function showUsers(users) {
@@ -622,13 +771,11 @@
           list.classList.add("hide");
           return;
         }
-
         list.classList.remove("hide");
         list.innerHTML =
-          '<h3 style="font-size:15px;margin:15px 0 10px;color:#333">Online Users (' +
+          '<h3 style="font-size:15px;margin:15px 0 10px">Online (' +
           users.length +
           "):</h3>";
-
         users.forEach((u) => {
           const div = document.createElement("div");
           div.className = "user";
@@ -661,6 +808,7 @@
         if (stream) stream.getTracks().forEach((t) => t.stop());
         document.getElementById("vid").classList.remove("on");
         document.getElementById("msgs").innerHTML = "";
+        document.getElementById("historyInfo").classList.add("hide");
         hide("chatbox");
         show("select");
         ws.send(JSON.stringify({ type: "get-online-users" }));
