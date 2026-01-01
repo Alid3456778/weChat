@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WebRTC Chat</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+      }
+      .box {
+        background: #fff;
+        width: 100%;
+        max-width: 650px;
+        border-radius: 15px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+      .head {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        padding: 20px;
+        text-align: center;
+      }
+      .head h1 {
+        font-size: 22px;
+      }
+      .head p {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-top: 5px;
+      }
+      .content {
+        padding: 20px;
+      }
+      input {
+        width: 100%;
+        padding: 14px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 15px;
+        margin-bottom: 10px;
+      }
+      input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      button {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 10px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        transition: transform 0.2s;
+      }
+      button:active {
+        transform: scale(0.98);
+      }
+      button.gray {
+        background: #6c757d;
+      }
+      .status {
+        padding: 14px;
+        background: #f0f2f5;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        text-align: center;
+        font-size: 14px;
+      }
+      .green {
+        color: #28a745;
+        font-weight: 600;
+      }
+      .red {
+        color: #dc3545;
+        font-weight: 600;
+      }
+      .video {
+        background: #000;
+        width: 100%;
+        aspect-ratio: 16/9;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        position: relative;
+        display: none;
+      }
+      .video.on {
+        display: block;
+      }
+      .video video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 8px;
+      }
+      .tag {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(102, 126, 234, 0.95);
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 15px;
+        font-size: 13px;
+        font-weight: 600;
+        z-index: 10;
+      }
+      .chat {
+        background: #f0f2f5;
+        padding: 15px;
+        height: 350px;
+        overflow-y: auto;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .m {
+        max-width: 75%;
+        padding: 12px 16px;
+        border-radius: 18px;
+        word-wrap: break-word;
+        font-size: 14px;
+        line-height: 1.4;
+        animation: slide 0.3s ease;
+      }
+      @keyframes slide {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .m.sent {
+        align-self: flex-end;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        border-bottom-right-radius: 4px;
+      }
+      .m.rcv {
+        align-self: flex-start;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+        border-bottom-left-radius: 4px;
+        color: #333;
+      }
+      .m strong {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 4px;
+        opacity: 0.85;
+      }
+      .m .txt {
+        display: block;
+      }
+      .m .time {
+        font-size: 10px;
+        opacity: 0.7;
+        margin-top: 4px;
+      }
+      .inbox {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .inbox input {
+        margin: 0;
+        flex: 1;
+      }
+      .inbox button {
+        width: 50px;
+        height: 50px;
+        min-width: 50px;
+        border-radius: 50%;
+        padding: 0;
+        font-size: 20px;
+      }
+      .hide {
+        display: none;
+      }
+      .users {
+        margin-top: 15px;
+      }
+      .user {
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .user:hover {
+        background: #e9ecef;
+      }
+      .user button {
+        width: auto;
+        padding: 8px 16px;
+        font-size: 13px;
+        margin: 0;
+      }
+      .info {
+        font-size: 12px;
+        padding: 12px;
+        background: #fff3cd;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        text-align: center;
+        color: #856404;
+      }
+      .ctrl {
+      display: none;
+        text-align: center;
+        margin-bottom: 15px;
+      }
+      .ctrl button {
+        background: #dc3545;
+        width: auto;
+        padding: 10px 20px;
+      }
+      @media (max-width: 600px) {
+        .box {
+          max-width: 100%;
+        }
+        .chat {
+          height: 280px;
+        }
+        .m {
+          max-width: 85%;
+          font-size: 13px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <div class="head">
+        <h1>🚀 WebRTC Chat</h1>
+        <p>🔒 End-to-End Encrypted • Auto-Connect</p>
+      </div>
+      <div class="content">
+        <!-- Login -->
+        <div id="login">
+          <input
+            type="text"
+            id="user"
+            placeholder="Your username (e.g., john123)"
+          />
+          <button onclick="login()">Connect to Server</button>
+          <div class="info">💡 Choose a unique username</div>
+        </div>
+
+        <!-- Select Friend -->
+        <div id="select" class="hide">
+          <div class="status">
+            <span class="green">✅ You're Online as <b id="me"></b></span>
+          </div>
+          <input
+            type="text"
+            id="friend"
+            placeholder="Enter friend's username"
+          />
+          <button onclick="connect()">Check & Connect</button>
+          <div id="userlist" class="users hide"></div>
+        </div>
+
+        <!-- Chat -->
+        <div id="chatbox" class="hide">
+          <div class="status" id="stat">⏳ Connecting...</div>
+          <div id="vid" class="video">
+            <video id="v" autoplay playsinline muted></video>
+            <div class="tag" id="tag">📹 Live</div>
+          </div>
+          <div id="camctrl" class="ctrl hide">
+            <button onclick="stopCam()">Stop My Camera</button>
+          </div>
+          <div class="chat" id="msgs"></div>
+          <div class="inbox">
+            <input
+              type="text"
+              id="txt"
+              placeholder="Type a message..."
+              onkeypress="if(event.key==='Enter')send()"
+            />
+            <button onclick="send()">➤</button>
+          </div>
+          <button class="gray" onclick="disc()" style="margin-top: 10px">
+            Disconnect
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let ws,
+        pc,
+        dc,
+        me,
+        fr,
+        stream,
+        iceQueue = [];
+
+      const ice = {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+        ],
+      };
+
+      // Auto WebSocket URL
+      const wsUrl = (() => {
+        const isLocal =
+          location.hostname === "localhost" ||
+          location.hostname === "127.0.0.1";
+        if (isLocal) return "ws://localhost:8080";
+        const proto = location.protocol === "https:" ? "wss" : "ws";
+        return `${proto}://${location.host}`;
+      })();
+
+      console.log("WebSocket URL:", wsUrl);
+
+      function login() {
+        me = document.getElementById("user").value.trim().toLowerCase();
+        if (!me) return alert("Enter username");
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          console.log("✅ Connected to server");
+          ws.send(JSON.stringify({ type: "register", username: me }));
+        };
+
+        ws.onmessage = handle;
+
+        ws.onerror = (err) => {
+          console.error("WebSocket error:", err);
+          alert("❌ Cannot connect to server. Make sure server is running!");
+        };
+
+        ws.onclose = () => console.log("Disconnected from server");
+      }
+
+      function handle(e) {
+        const d = JSON.parse(e.data);
+        console.log("Received:", d.type);
+
+        if (d.type === "registered") {
+          hide("login");
+          show("select");
+          document.getElementById("me").textContent = me;
+          ws.send(JSON.stringify({ type: "get-online-users" }));
+        } else if (d.type === "status") {
+          if (d.online) {
+            document.getElementById("stat").innerHTML =
+              '<span class="green">✅ ' +
+              d.friend +
+              " is online - connecting...</span>";
+            makeOffer(d.friend);
+          } else {
+            document.getElementById("stat").innerHTML =
+              '<span class="red">⭕ ' + d.friend + " is offline</span>";
+            setTimeout(
+              () =>
+                alert(d.friend + " is not online. They need to open the app."),
+              100
+            );
+          }
+        } else if (d.type === "offer") {
+          fr = d.from;
+          getOffer(d.offer, d.from);
+        } else if (d.type === "answer") {
+          getAnswer(d.answer);
+        } else if (d.type === "ice-candidate") {
+          // Queue ICE candidates until remote description is set
+          if (pc) {
+            if (pc.remoteDescription) {
+              pc.addIceCandidate(new RTCIceCandidate(d.candidate)).catch((e) =>
+                console.log("ICE candidate error:", e)
+              );
+            } else {
+              console.log("Queueing ICE candidate");
+              iceQueue.push(d.candidate);
+            }
+          }
+        } else if (d.type === "online-users") {
+          showUsers(d.users);
+        }
+      }
+
+      function connect() {
+        fr = document.getElementById("friend").value.trim().toLowerCase();
+        if (!fr) return alert("Enter friend username");
+        if (fr === me) return alert("Cannot connect to yourself!");
+
+        hide("select");
+        show("chatbox");
+        ws.send(JSON.stringify({ type: "check-online", friend: fr }));
+      }
+
+      async function makeOffer(to) {
+        console.log("Creating offer for", to);
+        pc = new RTCPeerConnection(ice);
+        iceQueue = [];
+
+        // Create data channel
+        dc = pc.createDataChannel("chat");
+        setupDC();
+
+        // Host receives video only
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
+
+        pc.ontrack = (e) => {
+          console.log("Received remote stream");
+          document.getElementById("v").srcObject = e.streams[0];
+          document.getElementById("vid").classList.add("on");
+          document.getElementById("tag").textContent = "📹 " + to;
+        };
+
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            ws.send(
+              JSON.stringify({
+                type: "ice-candidate",
+                candidate: e.candidate,
+                to,
+              })
+            );
+          }
+        };
+
+        pc.onconnectionstatechange = () =>
+          console.log("Connection state:", pc.connectionState);
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        ws.send(JSON.stringify({ type: "offer", offer, to, from: me }));
+      }
+
+      async function getOffer(offer, from) {
+        console.log("Received offer from", from);
+        hide("select");
+        show("chatbox");
+        document.getElementById("stat").innerHTML =
+          '<span class="green">✅ Connecting with ' + from + "...</span>";
+
+        pc = new RTCPeerConnection(ice);
+        iceQueue = [];
+
+        // Guest sends video
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: "user",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: true,
+          });
+
+          stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+          console.log("✅ Camera accessed");
+          document.getElementById("camctrl").classList.remove("hide");
+        } catch (e) {
+          console.error("Camera error:", e);
+          alert(
+            "❌ Camera permission denied or not available. Video features won't work."
+          );
+        }
+
+        pc.ondatachannel = (e) => {
+          console.log("Data channel received");
+          dc = e.channel;
+          setupDC();
+        };
+
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            ws.send(
+              JSON.stringify({
+                type: "ice-candidate",
+                candidate: e.candidate,
+                to: from,
+              })
+            );
+          }
+        };
+
+        pc.onconnectionstatechange = () =>
+          console.log("Connection state:", pc.connectionState);
+
+        await pc.setRemoteDescription(offer);
+        console.log("Remote description set");
+
+        // Process queued ICE candidates
+        iceQueue.forEach((candidate) => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((e) =>
+            console.log("Queued ICE error:", e)
+          );
+        });
+        iceQueue = [];
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        ws.send(JSON.stringify({ type: "answer", answer, to: from, from: me }));
+      }
+
+      async function getAnswer(answer) {
+        console.log("Received answer");
+        await pc.setRemoteDescription(answer);
+        console.log("Remote description set");
+
+        // Process queued ICE candidates
+        iceQueue.forEach((candidate) => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((e) =>
+            console.log("Queued ICE error:", e)
+          );
+        });
+        iceQueue = [];
+      }
+
+      function setupDC() {
+        dc.onopen = () => {
+          console.log("✅ Data channel open");
+          document.getElementById("stat").innerHTML =
+            '<span class="green">✅ Connected with ' + fr + "</span>";
+        };
+
+        dc.onmessage = (e) => {
+          console.log("Message received:", e.data);
+          msg(e.data, "rcv", fr);
+          if (navigator.vibrate) navigator.vibrate(50);
+        };
+
+        dc.onclose = () => {
+          console.log("Data channel closed");
+          document.getElementById("stat").innerHTML =
+            '<span class="red">⭕ Disconnected</span>';
+        };
+
+        dc.onerror = (e) => console.error("Data channel error:", e);
+      }
+
+      function send() {
+        const input = document.getElementById("txt");
+        const t = input.value.trim();
+
+        if (!t) {
+          console.log("Empty message");
+          return;
+        }
+
+        if (!dc) {
+          console.log("No data channel");
+          alert("Not connected yet!");
+          return;
+        }
+
+        if (dc.readyState !== "open") {
+          console.log("Data channel not open:", dc.readyState);
+          alert("Connection not ready. Wait a moment...");
+          return;
+        }
+
+        console.log("Sending message:", t);
+        dc.send(t);
+        msg(t, "sent", "You");
+        input.value = "";
+        input.focus();
+      }
+
+      function msg(txt, type, name) {
+        const m = document.createElement("div");
+        m.className = "m " + type;
+        const time = new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        m.innerHTML =
+          "<strong>" +
+          name +
+          '</strong><span class="txt">' +
+          esc(txt) +
+          '</span><span class="time">' +
+          time +
+          "</span>";
+
+        const chat = document.getElementById("msgs");
+        chat.appendChild(m);
+        chat.scrollTop = chat.scrollHeight;
+
+        console.log("Message added to UI");
+      }
+
+      function showUsers(users) {
+        const list = document.getElementById("userlist");
+        if (users.length === 0) {
+          list.classList.add("hide");
+          return;
+        }
+
+        list.classList.remove("hide");
+        list.innerHTML =
+          '<h3 style="font-size:15px;margin:15px 0 10px;color:#333">Online Users (' +
+          users.length +
+          "):</h3>";
+
+        users.forEach((u) => {
+          const div = document.createElement("div");
+          div.className = "user";
+          div.innerHTML =
+            '<span><span style="color:#28a745">●</span> ' +
+            u +
+            "</span><button onclick=\"quick('" +
+            u +
+            "')\">Connect</button>";
+          list.appendChild(div);
+        });
+      }
+
+      function quick(u) {
+        document.getElementById("friend").value = u;
+        connect();
+      }
+
+      function stopCam() {
+        if (stream) {
+          stream.getTracks().forEach((t) => t.stop());
+          stream = null;
+          document.getElementById("camctrl").classList.add("hide");
+          alert("Camera stopped");
+        }
+      }
+
+      function disc() {
+        if (pc) pc.close();
+        if (stream) stream.getTracks().forEach((t) => t.stop());
+        document.getElementById("vid").classList.remove("on");
+        document.getElementById("msgs").innerHTML = "";
+        hide("chatbox");
+        show("select");
+        ws.send(JSON.stringify({ type: "get-online-users" }));
+      }
+
+      function hide(id) {
+        document.getElementById(id).classList.add("hide");
+      }
+      function show(id) {
+        document.getElementById(id).classList.remove("hide");
+      }
+      function esc(t) {
+        const d = document.createElement("div");
+        d.textContent = t;
+        return d.innerHTML;
+      }
+
+      window.onbeforeunload = () => {
+        if (ws) ws.close();
+        if (pc) pc.close();
+        if (stream) stream.getTracks().forEach((t) => t.stop());
+      };
+    </script>
+  </body>
+</html>

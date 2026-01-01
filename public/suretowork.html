@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Chat + Video</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Fix mobile overflow issues [web:50][web:51] */
+        html {
+            width: 100%;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+            overflow-x: hidden;
+            position: relative;
+            width: 100%;
+        }
+
+        .container {
+            background: white;
+            width: 100%;
+            max-width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                border-radius: 20px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                max-width: 800px;
+                height: 90vh;
+                margin: 20px;
+            }
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .connection-section {
+            padding: 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex-shrink: 0;
+            max-width: 100%;
+        }
+
+        .connection-section.hidden {
+            display: none;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+            flex-shrink: 0;
+        }
+
+        .status-indicator.connected {
+            background: #28a745;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 10px;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .input-group input {
+            width: 100%;
+            max-width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 14px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            max-width: 100%;
+            touch-action: manipulation;
+            box-sizing: border-box;
+            word-wrap: break-word;
+            white-space: normal;
+            line-height: 1.4;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .connection-code {
+            background: white;
+            padding: 12px;
+            border-radius: 10px;
+            margin-top: 10px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 11px;
+            border: 2px dashed #667eea;
+            max-height: 150px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Responsive video container [web:55][web:58] */
+        .video-container {
+            position: relative;
+            background: #000;
+            display: none;
+            width: 100%;
+            max-width: 100%;
+            flex-shrink: 0;
+            aspect-ratio: 16 / 9;
+            max-height: 40vh;
+        }
+
+        .video-container.active {
+            display: block;
+        }
+
+        #remoteVideo {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .video-controls {
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            justify-content: center;
+            gap: 10px;
+            flex-shrink: 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .video-controls button {
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: #f0f2f5;
+            -webkit-overflow-scrolling: touch;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .message {
+            max-width: 75%;
+            padding: 10px 14px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            word-break: break-word;
+            animation: slideIn 0.3s ease;
+            font-size: 15px;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.sent {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.received {
+            align-self: flex-start;
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .message-time {
+            font-size: 10px;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+
+        .input-section {
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+            display: none;
+            flex-shrink: 0;
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        .input-section.active {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .input-section input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            background: white;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+
+        .input-section input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-section button {
+            width: 45px;
+            height: 45px;
+            min-width: 45px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .input-section button:active {
+            transform: scale(0.95);
+        }
+
+        .info-text {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            margin-top: 10px;
+            word-wrap: break-word;
+        }
+
+        .error-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            line-height: 1.5;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .error-box strong {
+            color: #856404;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        textarea {
+            width: 100%;
+            max-width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            min-height: 100px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-bottom: 10px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 14px;
+            z-index: 1000;
+            animation: fadeInOut 3s ease;
+            max-width: 90%;
+            word-wrap: break-word;
+            text-align: center;
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; }
+            10%, 90% { opacity: 1; }
+        }
+
+        .video-badge {
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .loader {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Mobile-specific fixes */
+        @media (max-width: 767px) {
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .header p {
+                font-size: 11px;
+            }
+
+            .btn {
+                font-size: 14px;
+                padding: 12px 16px;
+            }
+
+            .connection-section {
+                padding: 12px;
+            }
+
+            .video-container {
+                max-height: 35vh;
+            }
+
+            .message {
+                font-size: 14px;
+                max-width: 85%;
+            }
+
+            .connection-code {
+                font-size: 10px;
+                max-height: 120px;
+            }
+        }
+
+        /* Extra small screens */
+        @media (max-width: 360px) {
+            .btn {
+                font-size: 13px;
+                padding: 10px 14px;
+            }
+
+            .header h1 {
+                font-size: 16px;
+            }
+
+            .video-container {
+                max-height: 30vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 P2P Chat + Video</h1>
+            <p>Chat & One-Way Video Calling</p>
+        </div>
+
+        <div class="connection-section" id="connectionSection">
+            <div class="status">
+                <div class="status-indicator" id="statusIndicator"></div>
+                <span id="statusText">Not Connected</span>
+            </div>
+
+            <div class="error-box" id="securityWarning" style="display: none;">
+                <strong>⚠️ Camera Access Not Available</strong>
+                This page must be opened via:<br>
+                • <strong>HTTPS</strong> (https://...)<br>
+                • <strong>Localhost</strong> (http://localhost or http://127.0.0.1)<br>
+                <br>
+                <small>Video features won't work on regular HTTP.</small>
+            </div>
+
+            <div id="setupScreen">
+                <div class="input-group">
+                    <input type="text" id="yourName" placeholder="Enter your name" autocomplete="name" />
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="createRoom()">Create Room (Host - Will See Video)</button>
+                    <button class="btn btn-secondary" onclick="showJoinScreen()">Join Room (Guest - Will Share Video)</button>
+                </div>
+            </div>
+
+            <div id="createScreen" style="display: none;">
+                <p style="margin-bottom: 10px; font-weight: 600; font-size: 14px;">
+                    <span id="generatingText">Generating code... <span class="loader"></span></span>
+                    <span id="readyText" style="display: none;">Share this code with your friend:</span>
+                </p>
+                <div class="connection-code" id="offerCode"></div>
+                <div class="btn-group" style="margin-top: 10px;">
+                    <button class="btn btn-primary" onclick="copyCode()" id="copyBtn" disabled>Copy Code</button>
+                </div>
+                <p class="info-text">⚠️ You will see their video (they won't see yours)</p>
+                <p class="info-text" style="margin-top: 5px;">After they join, paste their code below:</p>
+                <textarea id="finalAnswerCode" placeholder="Paste friend's response code here..." style="margin-top: 10px;"></textarea>
+                <button class="btn btn-primary" onclick="completeConnectionMobile()">Complete Connection</button>
+            </div>
+
+            <div id="joinScreen" style="display: none;">
+                <div class="input-group">
+                    <input type="text" id="friendName" placeholder="Host's name" autocomplete="off" />
+                    <textarea id="answerCode" placeholder="Paste host's code here" style="min-height: 120px;"></textarea>
+                </div>
+                <p class="info-text" style="margin-bottom: 10px;">⚠️ Your camera will be shared with the host</p>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="joinRoom()">Connect & Share Camera</button>
+                    <button class="btn btn-secondary" onclick="backToSetup()">Back</button>
+                </div>
+            </div>
+
+            <div id="answerScreen" style="display: none;">
+                <p style="margin-bottom: 10px; font-weight: 600; font-size: 14px;">
+                    <span id="generatingAnswerText">Generating code... <span class="loader"></span></span>
+                    <span id="readyAnswerText" style="display: none;">Send this code back to host:</span>
+                </p>
+                <div class="connection-code" id="answerCodeDisplay"></div>
+                <div class="btn-group" style="margin-top: 10px;">
+                    <button class="btn btn-primary" onclick="copyAnswerCode()" id="copyAnswerBtn" disabled>Copy Code</button>
+                </div>
+                <p class="info-text">📹 Camera is ready - connection will complete when host confirms!</p>
+            </div>
+        </div>
+
+        <div class="video-container" id="videoContainer">
+            <video id="remoteVideo" autoplay playsinline muted></video>
+            <div class="video-overlay">
+                <span class="video-badge" id="videoBadge">📹 Live</span>
+            </div>
+        </div>
+
+        <div class="video-controls" id="videoControls" style="display: none;">
+            <button class="btn btn-danger" onclick="stopVideo()" style="width: auto;">Stop My Camera</button>
+        </div>
+
+        <div class="messages" id="messages"></div>
+
+        <div class="input-section" id="inputSection">
+            <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)" autocomplete="off" />
+            <button onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+
+    <script>
+        let pc = null;
+        let dc = null;
+        let yourName = '';
+        let friendName = '';
+        let isHost = false;
+        let localStream = null;
+        const config = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        function checkMediaDevicesSupport() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                document.getElementById('securityWarning').style.display = 'block';
+                return false;
+            }
+            return true;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            checkMediaDevicesSupport();
+        });
+
+        function waitForICEGathering(pc, timeout = 3000) {
+            return new Promise((resolve) => {
+                let hasResolved = false;
+                
+                const checkState = () => {
+                    if (!hasResolved && pc.iceGatheringState === 'complete') {
+                        hasResolved = true;
+                        resolve();
+                    }
+                };
+
+                pc.addEventListener('icegatheringstatechange', checkState);
+                pc.addEventListener('icecandidate', (event) => {
+                    if (!event.candidate) {
+                        checkState();
+                    }
+                });
+
+                setTimeout(() => {
+                    if (!hasResolved) {
+                        hasResolved = true;
+                        resolve();
+                    }
+                }, timeout);
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        async function createRoom() {
+            const nameInput = document.getElementById('yourName');
+            yourName = nameInput.value.trim();
+            
+            if (!yourName) {
+                showToast('Please enter your name');
+                return;
+            }
+
+            isHost = true;
+            pc = new RTCPeerConnection(config);
+            dc = pc.createDataChannel('chat');
+            setupDataChannel();
+
+            pc.addTransceiver('video', { direction: 'recvonly' });
+            pc.addTransceiver('audio', { direction: 'recvonly' });
+
+            pc.ontrack = (event) => {
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (remoteVideo.srcObject !== event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                    document.getElementById('videoContainer').classList.add('active');
+                    showToast('Video connected!');
+                }
+            };
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('createScreen').style.display = 'block';
+
+            await waitForICEGathering(pc, 3000);
+            
+            document.getElementById('offerCode').textContent = btoa(JSON.stringify(pc.localDescription));
+            document.getElementById('generatingText').style.display = 'none';
+            document.getElementById('readyText').style.display = 'inline';
+            document.getElementById('copyBtn').disabled = false;
+            showToast('Code ready!');
+        }
+
+        function showJoinScreen() {
+            const nameInput = document.getElementById('yourName');
+            yourName = nameInput.value.trim();
+            
+            if (!yourName) {
+                showToast('Please enter your name');
+                return;
+            }
+
+            isHost = false;
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('joinScreen').style.display = 'block';
+        }
+
+        async function joinRoom() {
+            const code = document.getElementById('answerCode').value.trim();
+            friendName = document.getElementById('friendName').value.trim();
+            
+            if (!code || !friendName) {
+                showToast('Please enter both name and code');
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showToast('❌ Camera not available - Page must use HTTPS or localhost');
+                document.getElementById('securityWarning').style.display = 'block';
+                return;
+            }
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'user' }, 
+                    audio: true 
+                });
+
+                const offer = JSON.parse(atob(code));
+                pc = new RTCPeerConnection(config);
+
+                localStream.getTracks().forEach(track => {
+                    pc.addTrack(track, localStream);
+                });
+
+                pc.ondatachannel = e => {
+                    dc = e.channel;
+                    setupDataChannel();
+                };
+
+                await pc.setRemoteDescription(offer);
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                document.getElementById('joinScreen').style.display = 'none';
+                document.getElementById('answerScreen').style.display = 'block';
+                document.getElementById('videoControls').style.display = 'flex';
+
+                await waitForICEGathering(pc, 3000);
+
+                document.getElementById('answerCodeDisplay').textContent = btoa(JSON.stringify(pc.localDescription));
+                document.getElementById('generatingAnswerText').style.display = 'none';
+                document.getElementById('readyAnswerText').style.display = 'inline';
+                document.getElementById('copyAnswerBtn').disabled = false;
+                showToast('Code ready!');
+            } catch (err) {
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    showToast('❌ Camera permission denied!');
+                } else if (err.name === 'NotFoundError') {
+                    showToast('❌ No camera found!');
+                } else {
+                    showToast('❌ Error: ' + err.message);
+                }
+                console.error('Error joining room:', err);
+            }
+        }
+
+        function setupDataChannel() {
+            dc.onopen = () => {
+                document.getElementById('statusIndicator').classList.add('connected');
+                document.getElementById('statusText').textContent = `Connected${friendName ? ' with ' + friendName : ''}`;
+                document.getElementById('connectionSection').classList.add('hidden');
+                document.getElementById('inputSection').classList.add('active');
+                
+                dc.send(JSON.stringify({ type: 'name', name: yourName }));
+                showToast('✅ Connected successfully!');
+            };
+
+            dc.onmessage = e => {
+                const data = JSON.parse(e.data);
+                
+                if (data.type === 'name') {
+                    friendName = data.name;
+                    document.getElementById('statusText').textContent = `Connected with ${friendName}`;
+                    document.getElementById('videoBadge').textContent = `📹 ${friendName}`;
+                } else if (data.type === 'message') {
+                    addMessage(data.text, 'received', data.name);
+                    
+                    if ('vibrate' in navigator) {
+                        navigator.vibrate(50);
+                    }
+                } else if (data.type === 'video_stopped') {
+                    showToast('Guest stopped their camera');
+                    document.getElementById('videoContainer').classList.remove('active');
+                }
+            };
+
+            dc.onclose = () => {
+                document.getElementById('statusIndicator').classList.remove('connected');
+                document.getElementById('statusText').textContent = 'Disconnected';
+                showToast('Connection closed');
+                stopVideo();
+            };
+        }
+
+        async function completeConnectionMobile() {
+            const answerCode = document.getElementById('finalAnswerCode').value.trim();
+            
+            if (!answerCode) {
+                showToast('Please paste the code first');
+                return;
+            }
+
+            try {
+                const answer = JSON.parse(atob(answerCode));
+                await pc.setRemoteDescription(answer);
+                showToast('Connection completing...');
+            } catch (err) {
+                showToast('Invalid code! Please check');
+                console.error('Error completing connection:', err);
+            }
+        }
+
+        function stopVideo() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+                document.getElementById('videoControls').style.display = 'none';
+                
+                if (dc && dc.readyState === 'open') {
+                    dc.send(JSON.stringify({ type: 'video_stopped' }));
+                }
+                
+                showToast('Camera stopped');
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            
+            if (!text || !dc || dc.readyState !== 'open') return;
+
+            dc.send(JSON.stringify({ type: 'message', text: text, name: yourName }));
+            addMessage(text, 'sent', 'You');
+            input.value = '';
+            
+            if ('vibrate' in navigator) {
+                navigator.vibrate(10);
+            }
+        }
+
+        function addMessage(text, type, name) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            messageDiv.innerHTML = `
+                <div><strong>${name}</strong></div>
+                <div>${escapeHtml(text)}</div>
+                <div class="message-time">${time}</div>
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function copyCode() {
+            const code = document.getElementById('offerCode').textContent;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code).then(() => {
+                    showToast('✅ Code copied!');
+                }).catch(() => {
+                    fallbackCopy(code);
+                });
+            } else {
+                fallbackCopy(code);
+            }
+        }
+
+        function copyAnswerCode() {
+            const code = document.getElementById('answerCodeDisplay').textContent;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code).then(() => {
+                    showToast('✅ Code copied!');
+                }).catch(() => {
+                    fallbackCopy(code);
+                });
+            } else {
+                fallbackCopy(code);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                showToast('✅ Code copied!');
+            } catch (err) {
+                showToast('Copy failed. Please copy manually');
+            }
+            
+            document.body.removeChild(textArea);
+        }
+
+        function backToSetup() {
+            document.getElementById('joinScreen').style.display = 'none';
+            document.getElementById('setupScreen').style.display = 'block';
+        }
+
+        window.addEventListener('beforeunload', () => {
+            stopVideo();
+            if (pc) pc.close();
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.addEventListener('touchmove', (e) => {
+                e.stopPropagation();
+            });
+        });
+    </script>
+</body>
+</html>
