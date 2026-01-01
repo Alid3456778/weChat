@@ -75,6 +75,12 @@
       button.gray {
         background: #6c757d;
       }
+      button.orange {
+        background: #ff9800;
+      }
+      button.red {
+        background: #dc3545;
+      }
       .status {
         padding: 14px;
         background: #f0f2f5;
@@ -120,6 +126,21 @@
         font-size: 13px;
         font-weight: 600;
         z-index: 10;
+      }
+      .pip-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(255, 152, 0, 0.95);
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: none;
+      }
+      .pip-badge.on {
+        display: block;
       }
       .chat {
         background: #f0f2f5;
@@ -229,16 +250,50 @@
         margin-bottom: 10px;
         text-align: center;
         color: #856404;
+        line-height: 1.6;
+      }
+      .warning {
+        background: #ffebee;
+        color: #c62828;
+        border: 2px solid #ef5350;
+      }
+      .success {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 2px solid #66bb6a;
       }
       .ctrl {
-      display: none;
-        text-align: center;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
         margin-bottom: 15px;
       }
       .ctrl button {
-        background: #dc3545;
-        width: auto;
-        padding: 10px 20px;
+        margin: 0;
+        width: 100%;
+        padding: 12px;
+        font-size: 14px;
+      }
+      .localvid {
+        width: 120px;
+        height: 90px;
+        background: #000;
+        border-radius: 8px;
+        position: fixed;
+        bottom: 100px;
+        right: 20px;
+        z-index: 100;
+        border: 3px solid #667eea;
+        display: none;
+      }
+      .localvid.on {
+        display: block;
+      }
+      .localvid video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 6px;
       }
       @media (max-width: 600px) {
         .box {
@@ -251,17 +306,22 @@
           max-width: 85%;
           font-size: 13px;
         }
+        .localvid {
+          width: 100px;
+          height: 75px;
+          bottom: 80px;
+          right: 15px;
+        }
       }
     </style>
   </head>
   <body>
     <div class="box">
       <div class="head">
-        <h1>🚀 WebRTC Chat</h1>
-        <p>🔒 End-to-End Encrypted • Auto-Connect</p>
+        <h1>🚀 WebRTC Chat + PiP</h1>
+        <p>🔒 Encrypted • Background Video Support</p>
       </div>
       <div class="content">
-        <!-- Login -->
         <div id="login">
           <input
             type="text"
@@ -272,7 +332,6 @@
           <div class="info">💡 Choose a unique username</div>
         </div>
 
-        <!-- Select Friend -->
         <div id="select" class="hide">
           <div class="status">
             <span class="green">✅ You're Online as <b id="me"></b></span>
@@ -286,16 +345,39 @@
           <div id="userlist" class="users hide"></div>
         </div>
 
-        <!-- Chat -->
         <div id="chatbox" class="hide">
           <div class="status" id="stat">⏳ Connecting...</div>
+
+          <div id="pipInfo" class="info success hide">
+            ✅ <strong>Picture-in-Picture Available!</strong><br />
+            Click the PiP button below to keep video running when you minimize
+            the app.
+          </div>
+
+          <div id="mobileWarn" class="info warning hide">
+            ⚠️ <strong>Mobile Users:</strong><br />
+            Camera pauses when app is minimized. Use Picture-in-Picture mode to
+            keep it active!
+          </div>
+
           <div id="vid" class="video">
             <video id="v" autoplay playsinline muted></video>
+            <div class="pip-badge" id="pipBadge">📺 PiP Active</div>
             <div class="tag" id="tag">📹 Live</div>
           </div>
-          <div id="camctrl" class="ctrl hide">
-            <button onclick="stopCam()">Stop My Camera</button>
+
+          <!-- Local video preview (for guest) -->
+          <div id="localvid" class="localvid">
+            <video id="localv" autoplay playsinline muted></video>
           </div>
+
+          <div id="camctrl" class="ctrl hide">
+            <button onclick="togglePiP()" class="orange" id="pipBtn">
+              📱 Enable PiP
+            </button>
+            <button onclick="stopCam()" class="red">⏹ Stop Camera</button>
+          </div>
+
           <div class="chat" id="msgs"></div>
           <div class="inbox">
             <input
@@ -320,7 +402,9 @@
         me,
         fr,
         stream,
-        iceQueue = [];
+        iceQueue = [],
+        wakeLock = null,
+        isPiPActive = false;
 
       const ice = {
         iceServers: [
@@ -329,7 +413,6 @@
         ],
       };
 
-      // Auto WebSocket URL
       const wsUrl = (() => {
         const isLocal =
           location.hostname === "localhost" ||
@@ -339,32 +422,134 @@
         return `${proto}://${location.host}`;
       })();
 
-      console.log("WebSocket URL:", wsUrl);
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      // Check PiP support
+      const pipSupported = "pictureInPictureEnabled" in document;
+      console.log("PiP Supported:", pipSupported);
+
+      // Wake Lock API
+      async function requestWakeLock() {
+        if ("wakeLock" in navigator) {
+          try {
+            wakeLock = await navigator.wakeLock.request("screen");
+            console.log("✅ Wake Lock active");
+            wakeLock.addEventListener("release", () => {
+              console.log("Wake Lock released");
+              wakeLock = null;
+            });
+          } catch (e) {
+            console.log("Wake Lock error:", e);
+          }
+        }
+      }
+
+      function releaseWakeLock() {
+        if (wakeLock) {
+          wakeLock.release();
+          wakeLock = null;
+        }
+      }
+
+      // Toggle Picture-in-Picture
+      async function togglePiP() {
+        const video = document.getElementById("v");
+
+        if (!pipSupported) {
+          alert(
+            "❌ Picture-in-Picture is not supported on this browser.\n\nTry:\n• Chrome on Android\n• Chrome/Edge on Desktop\n• Safari on macOS"
+          );
+          return;
+        }
+
+        try {
+          if (document.pictureInPictureElement) {
+            // Exit PiP
+            await document.exitPictureInPicture();
+            isPiPActive = false;
+            document.getElementById("pipBadge").classList.remove("on");
+            document.getElementById("pipBtn").textContent = "📱 Enable PiP";
+            document.getElementById("pipBtn").classList.remove("gray");
+            document.getElementById("pipBtn").classList.add("orange");
+          } else {
+            // Enter PiP
+            if (!video.srcObject) {
+              alert("❌ No video stream available yet");
+              return;
+            }
+
+            await video.requestPictureInPicture();
+            isPiPActive = true;
+            document.getElementById("pipBadge").classList.add("on");
+            document.getElementById("pipBtn").textContent = "📺 Exit PiP";
+            document.getElementById("pipBtn").classList.remove("orange");
+            document.getElementById("pipBtn").classList.add("gray");
+
+            // Show success message
+            if (isMobile) {
+              setTimeout(() => {
+                alert(
+                  '✅ PiP Active!\n\nYou can now:\n• Minimize this app\n• Switch to other apps\n• Camera will keep working!\n\nClick "Exit PiP" button to return to normal view.'
+                );
+              }, 500);
+            }
+          }
+        } catch (e) {
+          console.error("PiP error:", e);
+          alert(
+            "❌ Could not activate Picture-in-Picture.\n\nMake sure:\n• Video is playing\n• Browser supports PiP\n• You have permission"
+          );
+        }
+      }
+
+      // Monitor PiP status
+      if (pipSupported) {
+        document.addEventListener("enterpictureinpicture", () => {
+          console.log("✅ Entered PiP mode");
+          isPiPActive = true;
+          document.getElementById("pipBadge").classList.add("on");
+        });
+
+        document.addEventListener("leavepictureinpicture", () => {
+          console.log("❌ Left PiP mode");
+          isPiPActive = false;
+          document.getElementById("pipBadge").classList.remove("on");
+          document.getElementById("pipBtn").textContent = "📱 Enable PiP";
+          document.getElementById("pipBtn").classList.remove("gray");
+          document.getElementById("pipBtn").classList.add("orange");
+        });
+      }
+
+      // Monitor page visibility
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          console.log("⚠️ Page hidden");
+          if (!isPiPActive && stream) {
+            console.log("⚠️ Camera may pause - no PiP active");
+          }
+        } else {
+          console.log("✅ Page visible");
+          if (!wakeLock) requestWakeLock();
+        }
+      });
 
       function login() {
         me = document.getElementById("user").value.trim().toLowerCase();
         if (!me) return alert("Enter username");
 
         ws = new WebSocket(wsUrl);
-
         ws.onopen = () => {
           console.log("✅ Connected to server");
           ws.send(JSON.stringify({ type: "register", username: me }));
         };
-
         ws.onmessage = handle;
-
-        ws.onerror = (err) => {
-          console.error("WebSocket error:", err);
-          alert("❌ Cannot connect to server. Make sure server is running!");
-        };
-
-        ws.onclose = () => console.log("Disconnected from server");
+        ws.onerror = () =>
+          alert("❌ Cannot connect to server. Make sure it's running!");
+        ws.onclose = () => console.log("Disconnected");
       }
 
       function handle(e) {
         const d = JSON.parse(e.data);
-        console.log("Received:", d.type);
 
         if (d.type === "registered") {
           hide("login");
@@ -383,64 +568,65 @@
               '<span class="red">⭕ ' + d.friend + " is offline</span>";
             setTimeout(
               () =>
-                alert(d.friend + " is not online. They need to open the app."),
+                alert(
+                  d.friend + " is not online. They need to open the app first."
+                ),
               100
             );
           }
         } else if (d.type === "offer") {
           fr = d.from;
           getOffer(d.offer, d.from);
-        } else if (d.type === "answer") {
-          getAnswer(d.answer);
-        } else if (d.type === "ice-candidate") {
-          // Queue ICE candidates until remote description is set
+        } else if (d.type === "answer") getAnswer(d.answer);
+        else if (d.type === "ice-candidate") {
           if (pc) {
             if (pc.remoteDescription) {
               pc.addIceCandidate(new RTCIceCandidate(d.candidate)).catch((e) =>
-                console.log("ICE candidate error:", e)
+                console.log("ICE:", e)
               );
             } else {
-              console.log("Queueing ICE candidate");
               iceQueue.push(d.candidate);
             }
           }
-        } else if (d.type === "online-users") {
-          showUsers(d.users);
-        }
+        } else if (d.type === "online-users") showUsers(d.users);
       }
 
       function connect() {
         fr = document.getElementById("friend").value.trim().toLowerCase();
         if (!fr) return alert("Enter friend username");
         if (fr === me) return alert("Cannot connect to yourself!");
-
         hide("select");
         show("chatbox");
         ws.send(JSON.stringify({ type: "check-online", friend: fr }));
       }
 
       async function makeOffer(to) {
-        console.log("Creating offer for", to);
         pc = new RTCPeerConnection(ice);
         iceQueue = [];
-
-        // Create data channel
         dc = pc.createDataChannel("chat");
         setupDC();
 
-        // Host receives video only
         pc.addTransceiver("video", { direction: "recvonly" });
         pc.addTransceiver("audio", { direction: "recvonly" });
 
         pc.ontrack = (e) => {
-          console.log("Received remote stream");
-          document.getElementById("v").srcObject = e.streams[0];
+          console.log("✅ Received remote stream");
+          const video = document.getElementById("v");
+          video.srcObject = e.streams[0];
           document.getElementById("vid").classList.add("on");
           document.getElementById("tag").textContent = "📹 " + to;
+
+          // Show PiP info for host
+          if (pipSupported) {
+            document.getElementById("pipInfo").classList.remove("hide");
+            document.getElementById("camctrl").classList.remove("hide");
+          }
+          if (isMobile)
+            document.getElementById("mobileWarn").classList.remove("hide");
         };
 
         pc.onicecandidate = (e) => {
-          if (e.candidate) {
+          if (e.candidate)
             ws.send(
               JSON.stringify({
                 type: "ice-candidate",
@@ -448,20 +634,14 @@
                 to,
               })
             );
-          }
         };
-
-        pc.onconnectionstatechange = () =>
-          console.log("Connection state:", pc.connectionState);
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-
         ws.send(JSON.stringify({ type: "offer", offer, to, from: me }));
       }
 
       async function getOffer(offer, from) {
-        console.log("Received offer from", from);
         hide("select");
         show("chatbox");
         document.getElementById("stat").innerHTML =
@@ -470,7 +650,6 @@
         pc = new RTCPeerConnection(ice);
         iceQueue = [];
 
-        // Guest sends video
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -481,24 +660,38 @@
             audio: true,
           });
 
-          stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+          // Show local preview
+          document.getElementById("localv").srcObject = stream;
+          document.getElementById("localvid").classList.add("on");
+
+          stream.getTracks().forEach((t) => {
+            pc.addTrack(t, stream);
+            // Keep track enabled
+            t.enabled = true;
+          });
+
           console.log("✅ Camera accessed");
           document.getElementById("camctrl").classList.remove("hide");
+
+          if (pipSupported)
+            document.getElementById("pipInfo").classList.remove("hide");
+          if (isMobile) {
+            document.getElementById("mobileWarn").classList.remove("hide");
+            await requestWakeLock();
+          }
         } catch (e) {
           console.error("Camera error:", e);
           alert(
-            "❌ Camera permission denied or not available. Video features won't work."
+            "❌ Camera permission denied.\n\nPlease:\n1. Allow camera access\n2. Use HTTPS (not HTTP)\n3. Refresh and try again"
           );
         }
 
         pc.ondatachannel = (e) => {
-          console.log("Data channel received");
           dc = e.channel;
           setupDC();
         };
-
         pc.onicecandidate = (e) => {
-          if (e.candidate) {
+          if (e.candidate)
             ws.send(
               JSON.stringify({
                 type: "ice-candidate",
@@ -506,40 +699,28 @@
                 to: from,
               })
             );
-          }
         };
 
-        pc.onconnectionstatechange = () =>
-          console.log("Connection state:", pc.connectionState);
-
         await pc.setRemoteDescription(offer);
-        console.log("Remote description set");
-
-        // Process queued ICE candidates
-        iceQueue.forEach((candidate) => {
-          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((e) =>
-            console.log("Queued ICE error:", e)
-          );
-        });
+        iceQueue.forEach((c) =>
+          pc
+            .addIceCandidate(new RTCIceCandidate(c))
+            .catch((e) => console.log(e))
+        );
         iceQueue = [];
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-
         ws.send(JSON.stringify({ type: "answer", answer, to: from, from: me }));
       }
 
       async function getAnswer(answer) {
-        console.log("Received answer");
         await pc.setRemoteDescription(answer);
-        console.log("Remote description set");
-
-        // Process queued ICE candidates
-        iceQueue.forEach((candidate) => {
-          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((e) =>
-            console.log("Queued ICE error:", e)
-          );
-        });
+        iceQueue.forEach((c) =>
+          pc
+            .addIceCandidate(new RTCIceCandidate(c))
+            .catch((e) => console.log(e))
+        );
         iceQueue = [];
       }
 
@@ -549,44 +730,19 @@
           document.getElementById("stat").innerHTML =
             '<span class="green">✅ Connected with ' + fr + "</span>";
         };
-
         dc.onmessage = (e) => {
-          console.log("Message received:", e.data);
           msg(e.data, "rcv", fr);
           if (navigator.vibrate) navigator.vibrate(50);
         };
-
-        dc.onclose = () => {
-          console.log("Data channel closed");
-          document.getElementById("stat").innerHTML =
-            '<span class="red">⭕ Disconnected</span>';
-        };
-
-        dc.onerror = (e) => console.error("Data channel error:", e);
+        dc.onclose = () =>
+          (document.getElementById("stat").innerHTML =
+            '<span class="red">⭕ Disconnected</span>');
       }
 
       function send() {
         const input = document.getElementById("txt");
         const t = input.value.trim();
-
-        if (!t) {
-          console.log("Empty message");
-          return;
-        }
-
-        if (!dc) {
-          console.log("No data channel");
-          alert("Not connected yet!");
-          return;
-        }
-
-        if (dc.readyState !== "open") {
-          console.log("Data channel not open:", dc.readyState);
-          alert("Connection not ready. Wait a moment...");
-          return;
-        }
-
-        console.log("Sending message:", t);
+        if (!t || !dc || dc.readyState !== "open") return;
         dc.send(t);
         msg(t, "sent", "You");
         input.value = "";
@@ -608,12 +764,9 @@
           '</span><span class="time">' +
           time +
           "</span>";
-
         const chat = document.getElementById("msgs");
         chat.appendChild(m);
         chat.scrollTop = chat.scrollHeight;
-
-        console.log("Message added to UI");
       }
 
       function showUsers(users) {
@@ -622,13 +775,11 @@
           list.classList.add("hide");
           return;
         }
-
         list.classList.remove("hide");
         list.innerHTML =
-          '<h3 style="font-size:15px;margin:15px 0 10px;color:#333">Online Users (' +
+          '<h3 style="font-size:15px;margin:15px 0 10px">Online (' +
           users.length +
           "):</h3>";
-
         users.forEach((u) => {
           const div = document.createElement("div");
           div.className = "user";
@@ -651,7 +802,10 @@
         if (stream) {
           stream.getTracks().forEach((t) => t.stop());
           stream = null;
+          document.getElementById("localvid").classList.remove("on");
           document.getElementById("camctrl").classList.add("hide");
+          releaseWakeLock();
+          if (isPiPActive) document.exitPictureInPicture();
           alert("Camera stopped");
         }
       }
@@ -659,8 +813,13 @@
       function disc() {
         if (pc) pc.close();
         if (stream) stream.getTracks().forEach((t) => t.stop());
+        releaseWakeLock();
+        if (isPiPActive) document.exitPictureInPicture();
         document.getElementById("vid").classList.remove("on");
+        document.getElementById("localvid").classList.remove("on");
         document.getElementById("msgs").innerHTML = "";
+        document.getElementById("mobileWarn").classList.add("hide");
+        document.getElementById("pipInfo").classList.add("hide");
         hide("chatbox");
         show("select");
         ws.send(JSON.stringify({ type: "get-online-users" }));
@@ -679,6 +838,7 @@
       }
 
       window.onbeforeunload = () => {
+        releaseWakeLock();
         if (ws) ws.close();
         if (pc) pc.close();
         if (stream) stream.getTracks().forEach((t) => t.stop());
