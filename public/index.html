@@ -520,7 +520,6 @@
       font-size: 10px;
       color: rgba(255,255,255,0.7);
       flex-shrink: 0;
-      display: none;
     }
 
     .log { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
@@ -553,30 +552,6 @@
       .video-wrap { max-height: 35vh; }
       .input-area { padding: 10px 15px; }
     }
-    /* ===== FIX INPUT BAR PUSHING OUT ===== */
-
-.chat {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.messages {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 200px;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.input-area {
-  flex-shrink: 0;
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-}
-
   </style>
 </head>
 <body>
@@ -685,8 +660,28 @@
     const rtc = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        // Free TURN servers for better connectivity across networks
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ],
+      iceCandidatePoolSize: 10
     };
 
     const show = (id) => {
@@ -923,9 +918,35 @@
         dc = pc.createDataChannel('chat');
         setupDC();
 
+        let iceCandidatesComplete = false;
+
         pc.onicecandidate = (e) => {
           if (e.candidate) {
+            log(`Sending ICE candidate: ${e.candidate.type}`);
             ws.send(JSON.stringify({ type: 'ice-candidate', candidate: e.candidate, to: p }));
+          } else {
+            log('All ICE candidates sent');
+            iceCandidatesComplete = true;
+          }
+        };
+
+        pc.onicegatheringstatechange = () => {
+          log(`ICE gathering state: ${pc.iceGatheringState}`);
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          log(`ICE connection state: ${pc.iceConnectionState}`);
+          if (pc.iceConnectionState === 'connected') {
+            log('✅ ICE connected');
+            status('online', `Connected with ${peer}`);
+          } else if (pc.iceConnectionState === 'failed') {
+            log('❌ ICE connection failed - trying to restart');
+            status('connecting', 'Connection failed, retrying...');
+            // Try ICE restart
+            pc.restartIce();
+          } else if (pc.iceConnectionState === 'disconnected') {
+            log('⚠️ ICE disconnected');
+            status('connecting', 'Reconnecting...');
           }
         };
 
@@ -943,19 +964,45 @@
           log(`Connection state: ${pc.connectionState}`);
           if (pc.connectionState === 'connected') {
             status('online', `Connected with ${peer}`);
-          } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-            status('offline', 'Disconnected');
+          } else if (pc.connectionState === 'disconnected') {
+            status('connecting', 'Reconnecting...');
+          } else if (pc.connectionState === 'failed') {
+            status('offline', 'Connection failed');
+            alert('❌ Connection failed. This might be due to:\n\n• Firewall blocking connection\n• Router NAT issues\n• Network restrictions\n\nTry:\n1. Both use same WiFi\n2. Disable VPN\n3. Check firewall settings');
+          } else if (pc.connectionState === 'connecting') {
+            status('connecting', 'Establishing connection...');
           }
         };
 
         pc.addTransceiver('video', { direction: 'recvonly' });
         pc.addTransceiver('audio', { direction: 'recvonly' });
 
-        const offer = await pc.createOffer();
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true
+        });
         await pc.setLocalDescription(offer);
 
-        ws.send(JSON.stringify({ type: 'offer', offer, to: p, from: user }));
-        log('Offer sent');
+        log('Waiting for ICE candidates...');
+        // Wait a bit for ICE candidates to be gathered
+        await new Promise(resolve => {
+          if (iceCandidatesComplete) {
+            resolve();
+          } else {
+            setTimeout(resolve, 2000); // Wait max 2 seconds
+          }
+        });
+
+        ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription, to: p, from: user }));
+        log('Offer sent with ICE candidates');
+
+        // Set timeout for connection
+        setTimeout(() => {
+          if (pc && pc.connectionState === 'connecting') {
+            log('⚠️ Connection taking too long...');
+            status('connecting', 'Still connecting... (check network)');
+          }
+        }, 10000);
       } catch (e) {
         log(`❌ Error: ${e.message}`);
         alert(`Connection error: ${e.message}`);
@@ -1042,10 +1089,12 @@
 
     const handleIce = (candidate) => {
       if (pc && pc.remoteDescription) {
-        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => log(`ICE: ${e.message}`));
+        pc.addIceCandidate(new RTCIceCandidate(candidate))
+          .then(() => log(`✅ ICE candidate added: ${candidate.type || 'unknown'}`))
+          .catch(e => log(`❌ ICE error: ${e.message}`));
       } else {
         iceQ.push(candidate);
-        log('ICE queued');
+        log(`ICE queued (waiting for remote description)`);
       }
     };
 
