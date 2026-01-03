@@ -347,6 +347,8 @@
           max-width: 85%;
         }
       }
+
+      
     </style>
   </head>
   <body>
@@ -363,8 +365,8 @@
           <div class="alert alert-info">💡 Choose your role to get started</div>
 
           <select id="roleSelect" onchange="updateRoleUI()">
-            <option value="user">👤 Regular User (Send Video/Audio)</option>
-            <option value="admin">👑 Admin (Receive Video/Audio)</option>
+            <option value="user">👤 Regular User </option>
+            <option value="admin">👑 Admin </option>
           </select>
 
           <input
@@ -438,6 +440,9 @@
     </div>
 
     <script>
+      let peerAlive = false;
+let connectionTimer = null;
+
       // Configuration
       const ADMIN_PASSWORD = "admin123"; // CHANGE THIS!
       const WS_URL = (() => {
@@ -562,7 +567,7 @@
           stream.getTracks().forEach((track) => track.stop());
 
           statusDiv.innerHTML =
-            '<div class="alert alert-success">✅ Camera and microphone access granted!</div>';
+            '<div class="alert alert-success">✅ Access granted!</div>';
           addDiagnosticLog("✅ Media permissions granted");
           setTimeout(() => statusDiv.classList.add("hide"), 3000);
           return true;
@@ -596,7 +601,7 @@
           stream.getTracks().forEach((track) => track.stop());
 
           statusDiv.innerHTML =
-            '<div class="alert alert-success">✅ Camera and microphone ready! Waiting for admin to connect...</div>';
+            '<div class="alert alert-success">✅ Ready with ALL permision! Waiting for admin to connect...</div>';
           addDiagnosticLog("✅ Media permissions granted - ready to connect");
 
           setTimeout(() => {
@@ -733,21 +738,69 @@
           .join("");
       }
 
-      function connectToUser(username) {
-        connectedPeer = username;
-        showScreen("chatScreen");
-        diagnosticLogs = [];
-        addDiagnosticLog(`Connecting to ${username}...`);
+      // function connectToUser(username) {
+      //   connectedPeer = username;
+      //   showScreen("chatScreen");
+      //   diagnosticLogs = [];
+      //   addDiagnosticLog(`Connecting to ${username}...`);
 
-        ws.send(
-          JSON.stringify({
-            type: "check-online",
-            friend: username,
-          })
-        );
-      }
+      //   ws.send(
+      //     JSON.stringify({
+      //       type: "check-online",
+      //       friend: username,
+      //     })
+      //   );
+      // }
 
       // WebRTC - Create offer (Admin initiates)
+        function connectToUser(username) {
+  connectedPeer = username;
+  showScreen("chatScreen");
+  diagnosticLogs = [];
+  addDiagnosticLog(`Connecting to ${username}...`);
+
+  document.getElementById("connectionStatus").innerHTML =
+    "⏳ Connecting (10s timeout)...";
+
+  // ⏱️ Timeout protection
+  clearTimeout(connectionTimer);
+  connectionTimer = setTimeout(() => {
+    if (!peerAlive) {
+      addDiagnosticLog("❌ Connection timeout");
+      document.getElementById("connectionStatus").innerHTML =
+        `<span class="status-offline">❌ User not responding</span>`;
+      disconnectChat();
+    }
+  }, 10000);
+
+  ws.send(JSON.stringify({
+    type: "check-online",
+    friend: username
+  }));
+}
+
+function monitorNetwork() {
+  if (!pc) return;
+
+  setInterval(async () => {
+    const stats = await pc.getStats();
+    stats.forEach(report => {
+      if (report.type === "candidate-pair" && report.state === "succeeded") {
+        const rtt = report.currentRoundTripTime * 1000;
+
+        let quality = "🟢 Good";
+        if (rtt > 300) quality = "🟡 Medium";
+        if (rtt > 700) quality = "🔴 Poor";
+
+        document.getElementById("connectionStatus").innerHTML =
+          `📶 Network: ${quality} (${Math.round(rtt)} ms)`;
+      }
+    });
+  }, 4000);
+}
+
+
+      
       async function createOffer(peer) {
         try {
           addDiagnosticLog("Creating peer connection...");
@@ -779,6 +832,8 @@
             video.muted = false;
             document.getElementById("videoContainer").classList.add("active");
             document.getElementById("videoLabel").textContent = `🔹 ${peer}`;
+            monitorNetwork();
+
           };
 
           // Add transceivers to receive video/audio
@@ -920,25 +975,75 @@
         }
       }
 
+      let heartbeatInterval;
+
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatInterval = setInterval(() => {
+    if (dataChannel && dataChannel.readyState === "open") {
+      dataChannel.send("__ping__");
+    }
+  }, 3000);
+}
+
+function stopHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+}
+
       // Data channel setup
+      // function setupDataChannel() {
+      //   dataChannel.onopen = () => {
+      //     addDiagnosticLog("✅ Data channel open");
+      //     document.getElementById(
+      //       "connectionStatus"
+      //     ).innerHTML = `<span class="status-online">✅ Connected with ${connectedPeer}</span>`;
+      //   };
+
+      //   dataChannel.onmessage = (event) => {
+      //     displayMessage(event.data, "received", connectedPeer);
+      //   };
+
+      //   dataChannel.onclose = () => {
+      //     addDiagnosticLog("Data channel closed");
+      //     document.getElementById("connectionStatus").innerHTML =
+      //       '<span class="status-offline">⭕ Disconnected</span>';
+      //   };
+      // }
       function setupDataChannel() {
-        dataChannel.onopen = () => {
-          addDiagnosticLog("✅ Data channel open");
-          document.getElementById(
-            "connectionStatus"
-          ).innerHTML = `<span class="status-online">✅ Connected with ${connectedPeer}</span>`;
-        };
+  dataChannel.onopen = () => {
+    peerAlive = true;
+    addDiagnosticLog("✅ Data channel open (peer alive)");
 
-        dataChannel.onmessage = (event) => {
-          displayMessage(event.data, "received", connectedPeer);
-        };
+    document.getElementById("connectionStatus").innerHTML =
+      `<span class="status-online">🟢 Connected with ${connectedPeer}</span>`;
 
-        dataChannel.onclose = () => {
-          addDiagnosticLog("Data channel closed");
-          document.getElementById("connectionStatus").innerHTML =
-            '<span class="status-offline">⭕ Disconnected</span>';
-        };
-      }
+    // Send heartbeat every 3s
+    startHeartbeat();
+  };
+
+  dataChannel.onmessage = (event) => {
+    if (event.data === "__ping__") {
+      dataChannel.send("__pong__");
+      return;
+    }
+    if (event.data === "__pong__") return;
+
+    displayMessage(event.data, "received", connectedPeer);
+  };
+
+  dataChannel.onclose = () => {
+    peerAlive = false;
+    stopHeartbeat();
+
+    document.getElementById("connectionStatus").innerHTML =
+      `<span class="status-offline">🔴 User disconnected</span>`;
+
+    addDiagnosticLog("❌ Peer disconnected");
+  };
+}
 
       // Messaging
       function sendMessage() {
@@ -981,6 +1086,10 @@
 
       // Disconnect
       function disconnectChat() {
+        peerAlive = false;
+stopHeartbeat();
+clearTimeout(connectionTimer);
+
         if (pc) pc.close();
         if (localStream) {
           localStream.getTracks().forEach((track) => track.stop());
