@@ -1,882 +1,844 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>WebRTC Secure Chat</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      body {
-        font-family: Arial, sans-serif;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        min-height: 100vh;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 20px;
-      }
-      .box {
-        background: #fff;
-        width: 100%;
-        max-width: 650px;
-        border-radius: 15px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        overflow: hidden;
-      }
-      .head {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: #fff;
-        padding: 20px;
-        text-align: center;
-        position: relative;
-      }
-      .head h1 {
-        font-size: 22px;
-      }
-      .head p {
-        font-size: 12px;
-        opacity: 0.9;
-        margin-top: 5px;
-      }
-      .logout-btn {
-        /* position: absolute;
-        top: 20px;
-        right: 20px; */
-        background: rgba(255,255,255,0.2);
-        border: 2px solid rgba(255,255,255,0.4);
-        color: #fff;
-        padding: 6px 14px;
-        border-radius: 20px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 600;
-        transition: all 0.2s;
-      }
-      .logout-btn:hover {
-        background: rgba(255,255,255,0.3);
-        transform: scale(1.05);
-      }
-      .content {
-        padding: 20px;
-      }
-      input {
-        width: 100%;
-        padding: 14px;
-        border: 2px solid #ddd;
-        border-radius: 8px;
-        font-size: 15px;
-        margin-bottom: 10px;
-      }
-      input:focus {
-        outline: none;
-        border-color: #667eea;
-      }
-      button {
-        width: 100%;
-        padding: 14px;
-        border: none;
-        border-radius: 8px;
-        font-size: 15px;
-        font-weight: 600;
-        cursor: pointer;
-        margin-bottom: 10px;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: #fff;
-        transition: transform 0.2s;
-      }
-      button:active {
-        transform: scale(0.98);
-      }
-      button.gray {
-        background: #6c757d;
-      }
-      button.red {
-        background: #dc3545;
-      }
-      .status {
-        padding: 14px;
-        background: #f0f2f5;
-        border-radius: 8px;
-        margin-bottom: 15px;
-        text-align: center;
-        font-size: 14px;
-      }
-      .green {
-        color: #28a745;
-        font-weight: 600;
-      }
-      .red {
-        color: #dc3545;
-        font-weight: 600;
-      }
-      .video {
-        background: #000;
-        width: 100%;
-        aspect-ratio: 16/9;
-        border-radius: 8px;
-        margin-bottom: 15px;
-        position: relative;
-        display: none;
-      }
-      .video.on {
-        display: block;
-      }
-      .video video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 8px;
-      }
-      .tag {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        background: rgba(102, 126, 234, 0.95);
-        color: #fff;
-        padding: 8px 14px;
-        border-radius: 15px;
-        font-size: 13px;
-        font-weight: 600;
-        z-index: 10;
-      }
-      .chat {
-        background: #f0f2f5;
-        padding: 15px;
-        height: 400px;
-        overflow-y: auto;
-        border-radius: 8px;
-        margin-bottom: 15px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-      .date-sep {
-        text-align: center;
-        color: #666;
-        font-size: 12px;
-        margin: 10px 0;
-        font-weight: 600;
-      }
-      .m {
-        max-width: 75%;
-        padding: 12px 16px;
-        border-radius: 18px;
-        word-wrap: break-word;
-        font-size: 14px;
-        line-height: 1.4;
-        animation: slide 0.3s ease;
-      }
-      @keyframes slide {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-      .m.sent {
-        align-self: flex-end;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: #fff;
-        border-bottom-right-radius: 4px;
-      }
-      .m.rcv {
-        align-self: flex-start;
-        background: #fff;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-        border-bottom-left-radius: 4px;
-        color: #333;
-      }
-      .m strong {
-        display: block;
-        font-size: 12px;
-        margin-bottom: 4px;
-        opacity: 0.85;
-      }
-      .m .txt {
-        display: block;
-      }
-      .m .time {
-        font-size: 10px;
-        opacity: 0.7;
-        margin-top: 4px;
-      }
-      .inbox {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-      }
-      .inbox input {
-        margin: 0;
-        flex: 1;
-      }
-      .inbox button {
-        width: 50px;
-        height: 50px;
-        min-width: 50px;
-        border-radius: 50%;
-        padding: 0;
-        font-size: 20px;
-      }
-      .hide {
-        display: none;
-      }
-      .users-container {
-        margin-top: 10px;
-      }
-      .users-header {
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 12px;
-        color: #333;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .user-card {
-        padding: 14px 16px;
-        background: #fff;
-        border: 2px solid #e9ecef;
-        border-radius: 10px;
-        margin-bottom: 10px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-      .user-card:hover {
-        border-color: #667eea;
-        background: #f8f9ff;
-        transform: translateX(4px);
-      }
-      .user-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-      .online-dot {
-        width: 10px;
-        height: 10px;
-        background: #28a745;
-        border-radius: 50%;
-        animation: pulse 2s infinite;
-      }
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-      .user-name {
-        font-weight: 600;
-        color: #333;
-        font-size: 15px;
-      }
-      .user-status {
-        font-size: 12px;
-        color: #28a745;
-        font-weight: 500;
-      }
-      .connect-arrow {
-        color: #667eea;
-        font-size: 20px;
-        font-weight: bold;
-      }
-      .info {
-        font-size: 12px;
-        padding: 12px;
-        background: #fff3cd;
-        border-radius: 8px;
-        margin-bottom: 10px;
-        text-align: center;
-        color: #856404;
-        line-height: 1.6;
-      }
-      .success {
-        background: #e8f5e9;
-        color: #2e7d32;
-        border: 2px solid #66bb6a;
-      }
-      .ctrl {
-        display: none;
-        gap: 10px;
-        margin-bottom: 15px;
-        justify-content: center;
-      }
-      .ctrl button {
-        width: auto;
-        padding: 10px 16px;
-      }
-      .history-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px;
-        background: #e3f2fd;
-        border-radius: 8px;
-        margin-bottom: 10px;
-        font-size: 12px;
-        color: #1565c0;
-      }
-      .history-info button {
-        background: #1976d2;
-        color: #fff;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 11px;
-        width: auto;
-        margin: 0;
-      }
-      .empty-state {
-        text-align: center;
-        padding: 40px 20px;
-        color: #999;
-      }
-      .empty-state p {
-        font-size: 14px;
-        margin-top: 10px;
-      }
-      @media (max-width: 600px) {
-        .box {
-          max-width: 100%;
-        }
-        .chat {
-          height: 300px;
-        }
-        .m {
-          max-width: 85%;
-          font-size: 13px;
-        }
-        .logout-btn {
-          position: static;
-          margin-top: 10px;
-          width: auto;
-          display: inline-block;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="box">
-      <div class="head">
-        <h1>🚀 WebRTC Secure Chat</h1>
-        <p>🔒 End-to-End Encrypted • Chat History Saved</p>
-        <button class="logout-btn hide" id="logoutBtn" onclick="logout()">↩ Change User</button>
-      </div>
-      <div class="content">
-        <!-- Login Screen -->
-        <div id="login">
-          <input
-            type="text"
-            id="user"
-            placeholder="Your username (e.g., john123)"
-            onkeypress="if(event.key==='Enter')login()"
-          />
-          <button onclick="login()">Connect to Server</button>
-          <div class="info">
-            💡 Your username will be remembered on this device
-          </div>
-        </div>
-
-        <!-- User Selection Screen -->
-        <div id="select" class="hide">
-          <div class="status">
-            <span class="green">✅ You're Online as <b id="me"></b></span>
-          </div>
-          
-          <div id="usersContainer" class="users-container">
-            <div class="users-header">
-              <span>👥 Online Users</span>
-              <span style="font-size:12px;color:#999;font-weight:400" id="refreshTime"></span>
-            </div>
-            <div id="userlist"></div>
-          </div>
-        </div>
-
-        <!-- Chat Screen -->
-        <div id="chatbox" class="hide">
-          <div class="status" id="stat">⏳ Connecting...</div>
-
-          <div id="historyInfo" class="history-info hide">
-            <span>💾 <b id="msgCount">0</b> messages saved</span>
-            <button onclick="clearHistory()">Clear History</button>
-          </div>
-
-          <div id="vid" class="video">
-            <video id="v" autoplay playsinline></video>
-            <div class="tag" id="tag">🔹 Live</div>
-          </div>
-
-          <div id="camctrl" class="ctrl hide">
-            <button onclick="stopCam()" class="red">⏹ Stop Camera</button>
-          </div>
-
-          <div class="chat" id="msgs"></div>
-          <div class="inbox">
-            <input
-              type="text"
-              id="txt"
-              placeholder="Type a message..."
-              onkeypress="if(event.key==='Enter')send()"
-            />
-            <button onclick="send()">➤</button>
-          </div>
-          <button class="gray" onclick="disc()" style="margin-top: 10px">
-            ← Back to Users
-          </button>
-        </div>
-      </div>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WebRTC Chat - Admin System</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      max-width: 700px;
+      width: 100%;
+      border-radius: 20px;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 25px;
+      text-align: center;
+    }
+    .header h1 { font-size: 24px; margin-bottom: 8px; }
+    .header p { font-size: 13px; opacity: 0.9; }
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.2);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      margin-top: 12px;
+      font-weight: 600;
+    }
+    .content { padding: 25px; }
+    input, select {
+      width: 100%;
+      padding: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 15px;
+      margin-bottom: 12px;
+      transition: border 0.3s;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    button {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 12px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(102,126,234,0.3); }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-small {
+      width: auto;
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+    .alert {
+      padding: 14px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .alert-info { background: #d1ecf1; color: #0c5460; border-left: 4px solid #0c5460; }
+    .alert-success { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+    .alert-warning { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
+    .alert-danger { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+    .status-box {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+    .status-online { color: #28a745; font-weight: 600; }
+    .status-offline { color: #dc3545; font-weight: 600; }
+    .video-container {
+      position: relative;
+      background: #000;
+      border-radius: 15px;
+      aspect-ratio: 16/9;
+      margin-bottom: 15px;
+      overflow: hidden;
+      display: none;
+    }
+    .video-container.active { display: block; }
+    .video-container video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .video-label {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: rgba(102,126,234,0.9);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .chat-box {
+      background: #f8f9fa;
+      height: 400px;
+      overflow-y: auto;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .message {
+      max-width: 75%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      word-wrap: break-word;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .message-sent {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    .message-received {
+      align-self: flex-start;
+      background: white;
+      color: #333;
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .message strong { display: block; font-size: 12px; margin-bottom: 4px; opacity: 0.85; }
+    .message .text { display: block; font-size: 14px; line-height: 1.4; }
+    .message .time { display: block; font-size: 10px; opacity: 0.7; margin-top: 4px; }
+    .message-divider {
+      text-align: center;
+      color: #999;
+      font-size: 12px;
+      font-weight: 600;
+      margin: 15px 0;
+    }
+    .input-group {
+      display: flex;
+      gap: 10px;
+    }
+    .input-group input { margin: 0; flex: 1; }
+    .input-group button {
+      width: 55px;
+      min-width: 55px;
+      border-radius: 50%;
+      font-size: 22px;
+      padding: 0;
+    }
+    .user-list { margin-top: 15px; }
+    .user-card {
+      background: white;
+      border: 2px solid #e9ecef;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .user-card:hover {
+      border-color: #667eea;
+      background: #f8f9ff;
+      transform: translateX(4px);
+    }
+    .user-card-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .online-indicator {
+      width: 12px;
+      height: 12px;
+      background: #28a745;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.95); }
+    }
+    .user-name { font-weight: 600; font-size: 16px; color: #333; }
+    .user-status { font-size: 13px; color: #28a745; font-weight: 500; }
+    .diagnostic-log {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      margin-bottom: 15px;
+    }
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid #e9ecef;
+    }
+    .log-entry:last-child { border-bottom: none; }
+    .hide { display: none !important; }
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #999;
+    }
+    @media (max-width: 600px) {
+      .container { margin: 10px; }
+      .chat-box { height: 300px; }
+      .message { max-width: 85%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚀 WebRTC Secure Chat</h1>
+      <p id="headerSubtitle">🔒 End-to-End Encrypted Communication</p>
+      <div id="roleBadge" class="badge hide"></div>
     </div>
 
-    <script>
-      let ws, pc, dc, me, fr, stream, iceQueue = [];
-      let onlineUsers = [];
-      let refreshInterval;
-
-      const ice = {
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:stun2.l.google.com:19302" },
-        ],
-      };
-
-      const wsUrl = (() => {
-        const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-        if (isLocal) return "ws://localhost:8080";
-        const proto = location.protocol === "https:" ? "wss" : "ws";
-        return `${proto}://${location.host}`;
-      })();
-
-      // Encryption functions
-      function simpleEncrypt(text, key) {
-        let result = "";
-        for (let i = 0; i < text.length; i++) {
-          result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-        }
-        return btoa(result);
-      }
-
-      function simpleDecrypt(encrypted, key) {
-        try {
-          const decoded = atob(encrypted);
-          let result = "";
-          for (let i = 0; i < decoded.length; i++) {
-            result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-          }
-          return result;
-        } catch (e) {
-          return null;
-        }
-      }
-
-      function getEncryptionKey() {
-        let key = localStorage.getItem("_ek");
-        if (!key) {
-          key = Math.random().toString(36).substring(2) + Date.now().toString(36);
-          localStorage.setItem("_ek", key);
-        }
-        return key;
-      }
-
-      const encKey = getEncryptionKey();
-
-      // Save/Load message history
-      function saveMessage(friend, message, type) {
-        const chatKey = `chat_${me}_${friend}`;
-        let history = [];
-
-        try {
-          const stored = localStorage.getItem(chatKey);
-          if (stored) {
-            const decrypted = simpleDecrypt(stored, encKey);
-            if (decrypted) history = JSON.parse(decrypted);
-          }
-        } catch (e) {
-          console.log("History load error");
-        }
-
-        history.push({ msg: message, type: type, time: Date.now() });
-        if (history.length > 500) history = history.slice(-500);
-
-        try {
-          const encrypted = simpleEncrypt(JSON.stringify(history), encKey);
-          localStorage.setItem(chatKey, encrypted);
-        } catch (e) {
-          console.log("History save error");
-        }
-
-        updateMessageCount();
-      }
-
-      function loadHistory(friend) {
-        const chatKey = `chat_${me}_${friend}`;
-
-        try {
-          const stored = localStorage.getItem(chatKey);
-          if (!stored) return;
-
-          const decrypted = simpleDecrypt(stored, encKey);
-          if (!decrypted) return;
-
-          const history = JSON.parse(decrypted);
-
-          if (history.length > 0) {
-            const sep = document.createElement("div");
-            sep.className = "date-sep";
-            sep.textContent = "📜 Previous Messages";
-            document.getElementById("msgs").appendChild(sep);
-
-            const recent = history.slice(-50);
-            recent.forEach((item) => {
-              displayMessage(item.msg, item.type, item.type === "sent" ? "You" : friend, item.time, false);
-            });
-
-            const sep2 = document.createElement("div");
-            sep2.className = "date-sep";
-            sep2.textContent = "━━━━━ New Messages ━━━━━";
-            document.getElementById("msgs").appendChild(sep2);
-          }
-
-          updateMessageCount();
-        } catch (e) {
-          console.log("History load failed");
-        }
-      }
-
-      function updateMessageCount() {
-        if (!me || !fr) return;
-        const chatKey = `chat_${me}_${fr}`;
-
-        try {
-          const stored = localStorage.getItem(chatKey);
-          if (stored) {
-            const decrypted = simpleDecrypt(stored, encKey);
-            if (decrypted) {
-              const history = JSON.parse(decrypted);
-              document.getElementById("msgCount").textContent = history.length;
-              document.getElementById("historyInfo").classList.remove("hide");
-            }
-          }
-        } catch (e) {}
-      }
-
-      function clearHistory() {
-        if (!confirm("Delete all chat history with " + fr + "?\n\nThis cannot be undone!")) return;
-
-        const chatKey = `chat_${me}_${fr}`;
-        localStorage.removeItem(chatKey);
-        document.getElementById("msgs").innerHTML = "";
-        document.getElementById("msgCount").textContent = "0";
-        alert("✅ Chat history deleted");
-      }
-
-      // Auto-login on page load
-      window.onload = () => {
-        const savedUsername = localStorage.getItem("saved_username");
-        if (savedUsername) {
-          document.getElementById("user").value = savedUsername;
-          // Auto-login after small delay
-          setTimeout(() => login(), 300);
-        }
-      };
-
-      function login() {
-        me = document.getElementById("user").value.trim().toLowerCase();
-        if (!me) return alert("Enter username");
-
-        // Save username for next time
-        localStorage.setItem("saved_username", me);
-
-        ws = new WebSocket(wsUrl);
-        ws.onopen = () => {
-          console.log("✅ Connected");
-          ws.send(JSON.stringify({ type: "register", username: me }));
-        };
-        ws.onmessage = handle;
-        ws.onerror = () => alert("❌ Cannot connect to server");
-        ws.onclose = () => {
-          console.log("Disconnected");
-          clearInterval(refreshInterval);
-        };
-      }
-
-      function logout() {
-        if (!confirm("Logout and change username?")) return;
+    <div class="content">
+      <!-- Login Screen -->
+      <div id="loginScreen">
+        <div class="alert alert-info">
+          💡 Choose your role to get started
+        </div>
         
-        localStorage.removeItem("saved_username");
+        <select id="roleSelect" onchange="updateRoleUI()">
+          <option value="user">👤 Regular User (Send Video/Audio)</option>
+          <option value="admin">👑 Admin (Receive Video/Audio)</option>
+        </select>
         
-        if (ws) ws.close();
-        if (pc) pc.close();
-        if (stream) stream.getTracks().forEach((t) => t.stop());
+        <input type="text" id="usernameInput" placeholder="Enter your username" />
         
-        clearInterval(refreshInterval);
+        <input type="password" id="adminPasswordInput" class="hide" 
+               placeholder="Enter admin password" />
         
-        hide("select");
-        hide("chatbox");
-        show("login");
-        document.getElementById("logoutBtn").classList.add("hide");
-        document.getElementById("user").value = "";
+        <button class="btn-primary" onclick="handleLogin()">Connect</button>
         
-        location.reload();
+        <div id="loginInfo" class="alert alert-warning hide"></div>
+      </div>
+
+      <!-- Admin Dashboard -->
+      <div id="adminDashboard" class="hide">
+        <div class="status-box">
+          <span class="status-online">✅ Online as Admin: <strong id="adminUsername"></strong></span>
+        </div>
+
+        <div id="permissionStatus" class="hide"></div>
+
+        <div class="user-list">
+          <h3 style="margin-bottom:15px; color:#333;">👥 Online Users</h3>
+          <div id="userListContainer"></div>
+        </div>
+
+        <button class="btn-secondary" onclick="handleLogout()">Logout</button>
+      </div>
+
+      <!-- Chat Screen -->
+      <div id="chatScreen" class="hide">
+        <div id="connectionStatus" class="status-box">⏳ Connecting...</div>
+
+        <div id="diagnosticLog" class="diagnostic-log hide"></div>
+
+        <div id="videoContainer" class="video-container">
+          <video id="remoteVideo" autoplay playsinline></video>
+          <div class="video-label" id="videoLabel">🔹 Live</div>
+        </div>
+
+        <div class="chat-box" id="chatMessages"></div>
+
+        <div class="input-group">
+          <input type="text" id="messageInput" placeholder="Type a message..." 
+                 onkeypress="if(event.key==='Enter')sendMessage()" />
+          <button class="btn-primary" onclick="sendMessage()">➤</button>
+        </div>
+
+        <button class="btn-secondary" onclick="disconnectChat()" style="margin-top:10px">
+          ← Back
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration
+    const ADMIN_PASSWORD = "admin123"; // CHANGE THIS!
+    const WS_URL = (() => {
+      const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+      if (isLocal) return "ws://localhost:8080";
+      return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+    })();
+
+    // State
+    let ws, pc, dataChannel, localStream;
+    let currentUser = null;
+    let isAdmin = false;
+    let connectedPeer = null;
+    let iceQueue = [];
+    let diagnosticLogs = [];
+
+    // WebRTC config
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+
+    // Utility functions
+    function showScreen(screenId) {
+      ['loginScreen', 'adminDashboard', 'chatScreen'].forEach(id => {
+        document.getElementById(id).classList.add('hide');
+      });
+      document.getElementById(screenId).classList.remove('hide');
+    }
+
+    function addDiagnosticLog(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      diagnosticLogs.push(`[${timestamp}] ${message}`);
+      if (diagnosticLogs.length > 15) diagnosticLogs.shift();
+      
+      const logContainer = document.getElementById('diagnosticLog');
+      logContainer.innerHTML = diagnosticLogs.map(log => 
+        `<div class="log-entry">${log}</div>`
+      ).join('');
+      logContainer.scrollTop = logContainer.scrollHeight;
+      logContainer.classList.remove('hide');
+      console.log(message);
+    }
+
+    function updateRoleUI() {
+      const role = document.getElementById('roleSelect').value;
+      const pwdInput = document.getElementById('adminPasswordInput');
+      
+      if (role === 'admin') {
+        pwdInput.classList.remove('hide');
+        pwdInput.focus();
+      } else {
+        pwdInput.classList.add('hide');
       }
+    }
 
-      function handle(e) {
-        const d = JSON.parse(e.data);
+    // Auto-login on page load
+    window.onload = () => {
+      const savedUser = localStorage.getItem('chat_username');
+      const savedRole = localStorage.getItem('chat_role');
+      const savedPwd = localStorage.getItem('chat_admin_pwd');
 
-        if (d.type === "registered") {
-          hide("login");
-          show("select");
-          document.getElementById("me").textContent = me;
-          document.getElementById("logoutBtn").classList.remove("hide");
-          
-          // Request online users immediately
-          ws.send(JSON.stringify({ type: "get-online-users" }));
-          
-          // Auto-refresh online users every 5 seconds
-          refreshInterval = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "get-online-users" }));
-            }
-          }, 5000);
-          
-        } else if (d.type === "status") {
-          if (d.online) {
-            document.getElementById("stat").innerHTML = '<span class="green">✅ ' + d.friend + " is online - connecting...</span>";
-            makeOffer(d.friend);
-          } else {
-            document.getElementById("stat").innerHTML = '<span class="red">⭕ ' + d.friend + " is offline</span>";
-            setTimeout(() => alert(d.friend + " is not online"), 100);
-          }
-        } else if (d.type === "offer") {
-          fr = d.from;
-          getOffer(d.offer, d.from);
-        } else if (d.type === "answer") {
-          getAnswer(d.answer);
-        } else if (d.type === "ice-candidate") {
-          if (pc) {
-            if (pc.remoteDescription) {
-              pc.addIceCandidate(new RTCIceCandidate(d.candidate)).catch((e) => console.log("ICE:", e));
-            } else {
-              iceQueue.push(d.candidate);
-            }
-          }
-        } else if (d.type === "online-users") {
-          onlineUsers = d.users;
-          showUsers(d.users);
+      if (savedUser && savedRole) {
+        document.getElementById('usernameInput').value = savedUser;
+        document.getElementById('roleSelect').value = savedRole;
+        updateRoleUI();
+        
+        if (savedRole === 'admin' && savedPwd) {
+          document.getElementById('adminPasswordInput').value = savedPwd;
+          setTimeout(() => handleLogin(), 500);
+        } else if (savedRole === 'user') {
+          setTimeout(() => handleLogin(), 500);
         }
       }
+    };
 
-      function showUsers(users) {
-        const list = document.getElementById("userlist");
-        
-        // Update refresh time
-        const now = new Date();
-        document.getElementById("refreshTime").textContent = "Updated " + now.toLocaleTimeString();
-        
-        if (users.length === 0) {
-          list.innerHTML = '<div class="empty-state">😴<p>No other users online right now</p></div>';
+    // Login handler
+    async function handleLogin() {
+      const username = document.getElementById('usernameInput').value.trim();
+      const role = document.getElementById('roleSelect').value;
+      
+      if (!username) {
+        alert('Please enter a username');
+        return;
+      }
+
+      if (role === 'admin') {
+        const password = document.getElementById('adminPasswordInput').value;
+        if (password !== ADMIN_PASSWORD) {
+          alert('❌ Incorrect admin password!');
           return;
         }
+        isAdmin = true;
+        localStorage.setItem('chat_admin_pwd', password);
+      }
 
-        list.innerHTML = "";
-        users.forEach((u) => {
-          const card = document.createElement("div");
-          card.className = "user-card";
-          card.onclick = () => connectToUser(u);
-          
-          card.innerHTML = `
-            <div class="user-info">
-              <div class="online-dot"></div>
-              <div>
-                <div class="user-name">${u}</div>
-                <div class="user-status">Online</div>
-              </div>
-            </div>
-            <div class="connect-arrow">→</div>
-          `;
-          
-          list.appendChild(card);
+      currentUser = username.toLowerCase();
+      localStorage.setItem('chat_username', currentUser);
+      localStorage.setItem('chat_role', role);
+
+      // Check permissions for admin before connecting
+      if (isAdmin) {
+        const hasPermissions = await checkMediaPermissions();
+        if (!hasPermissions) {
+          alert('❌ Camera/microphone access is required for admin role');
+          return;
+        }
+      }
+
+      connectWebSocket();
+    }
+
+    // Check media permissions
+    async function checkMediaPermissions() {
+      const statusDiv = document.getElementById('permissionStatus');
+      statusDiv.innerHTML = '<div class="alert alert-warning">🔍 Checking camera/microphone...</div>';
+      statusDiv.classList.remove('hide');
+
+      try {
+        addDiagnosticLog('Requesting media permissions...');
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: true, 
+          audio: true 
         });
-      }
-
-      function connectToUser(username) {
-        fr = username;
-        hide("select");
-        show("chatbox");
         
-        loadHistory(fr);
-        ws.send(JSON.stringify({ type: "check-online", friend: fr }));
+        stream.getTracks().forEach(track => track.stop());
+        
+        statusDiv.innerHTML = '<div class="alert alert-success">✅ Camera and microphone access granted!</div>';
+        addDiagnosticLog('✅ Media permissions granted');
+        setTimeout(() => statusDiv.classList.add('hide'), 3000);
+        return true;
+      } catch (error) {
+        addDiagnosticLog(`❌ Permission error: ${error.name}`);
+        statusDiv.innerHTML = `
+          <div class="alert alert-danger">
+            ❌ <strong>Camera/Microphone Denied</strong><br>
+            Please allow permissions in your browser settings and refresh the page.<br>
+            <small>Error: ${error.name}</small>
+          </div>
+        `;
+        return false;
+      }
+    }
+
+    // WebSocket connection
+    function connectWebSocket() {
+      addDiagnosticLog('Connecting to server...');
+      
+      ws = new WebSocket(WS_URL);
+      
+      ws.onopen = () => {
+        addDiagnosticLog('✅ Connected to server');
+        ws.send(JSON.stringify({ 
+          type: 'register', 
+          username: currentUser 
+        }));
+      };
+
+      ws.onmessage = handleWebSocketMessage;
+      
+      ws.onerror = () => {
+        addDiagnosticLog('❌ WebSocket error');
+        alert('❌ Cannot connect to server. Please try again.');
+      };
+
+      ws.onclose = () => {
+        addDiagnosticLog('WebSocket closed');
+      };
+    }
+
+    // Handle WebSocket messages
+    function handleWebSocketMessage(event) {
+      const data = JSON.parse(event.data);
+      
+      switch(data.type) {
+        case 'registered':
+          handleRegistered();
+          break;
+        case 'online-users':
+          updateUserList(data.users);
+          break;
+        case 'offer':
+          handleOffer(data.offer, data.from);
+          break;
+        case 'answer':
+          handleAnswer(data.answer);
+          break;
+        case 'ice-candidate':
+          handleIceCandidate(data.candidate);
+          break;
+        case 'status':
+          if (data.online) {
+            createOffer(data.friend);
+          } else {
+            alert(`${data.friend} is offline`);
+          }
+          break;
+      }
+    }
+
+    function handleRegistered() {
+      addDiagnosticLog('✅ Registered on server');
+      
+      if (isAdmin) {
+        document.getElementById('roleBadge').textContent = '👑 ADMIN';
+        document.getElementById('roleBadge').classList.remove('hide');
+        document.getElementById('adminUsername').textContent = currentUser;
+        showScreen('adminDashboard');
+        requestUserList();
+        setInterval(requestUserList, 5000);
+      } else {
+        document.getElementById('roleBadge').textContent = '👤 USER';
+        document.getElementById('roleBadge').classList.remove('hide');
+        showScreen('chatScreen');
+        document.getElementById('connectionStatus').innerHTML = 
+          '<span style="color:#666">⏳ Waiting for admin to connect...</span>';
+        addDiagnosticLog('Waiting for admin connection...');
+      }
+    }
+
+    function requestUserList() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'get-online-users' }));
+      }
+    }
+
+    function updateUserList(users) {
+      const container = document.getElementById('userListContainer');
+      
+      if (users.length === 0) {
+        container.innerHTML = '<div class="empty-state">😴 No users online</div>';
+        return;
       }
 
-      async function makeOffer(to) {
-        pc = new RTCPeerConnection(ice);
+      container.innerHTML = users.map(user => `
+        <div class="user-card" onclick="connectToUser('${user}')">
+          <div class="user-card-info">
+            <div class="online-indicator"></div>
+            <div>
+              <div class="user-name">${user}</div>
+              <div class="user-status">Online</div>
+            </div>
+          </div>
+          <div style="color:#667eea;font-size:20px">→</div>
+        </div>
+      `).join('');
+    }
+
+    function connectToUser(username) {
+      connectedPeer = username;
+      showScreen('chatScreen');
+      diagnosticLogs = [];
+      addDiagnosticLog(`Connecting to ${username}...`);
+      
+      ws.send(JSON.stringify({ 
+        type: 'check-online', 
+        friend: username 
+      }));
+    }
+
+    // WebRTC - Create offer (Admin initiates)
+    async function createOffer(peer) {
+      try {
+        addDiagnosticLog('Creating peer connection...');
+        pc = new RTCPeerConnection(rtcConfig);
         iceQueue = [];
-        dc = pc.createDataChannel("chat");
-        setupDC();
 
-        pc.addTransceiver("video", { direction: "recvonly" });
-        pc.addTransceiver("audio", { direction: "recvonly" });
+        // Create data channel
+        dataChannel = pc.createDataChannel('chat');
+        setupDataChannel();
 
-        pc.ontrack = (e) => {
-          const video = document.getElementById("v");
-          video.srcObject = e.streams[0];
+        // Setup ICE candidate handling
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            ws.send(JSON.stringify({
+              type: 'ice-candidate',
+              candidate: event.candidate,
+              to: peer
+            }));
+          }
+        };
+
+        // Receive remote stream
+        pc.ontrack = (event) => {
+          addDiagnosticLog('✅ Receiving remote stream');
+          const video = document.getElementById('remoteVideo');
+          video.srcObject = event.streams[0];
           video.muted = false;
-          video.volume = 1.0;
-          document.getElementById("vid").classList.add("on");
-          document.getElementById("tag").textContent = "🔹 " + to;
+          document.getElementById('videoContainer').classList.add('active');
+          document.getElementById('videoLabel').textContent = `🔹 ${peer}`;
         };
 
-        pc.onicecandidate = (e) => {
-          if (e.candidate) ws.send(JSON.stringify({ type: "ice-candidate", candidate: e.candidate, to }));
-        };
+        // Add transceivers to receive video/audio
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.addTransceiver('audio', { direction: 'recvonly' });
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        ws.send(JSON.stringify({ type: "offer", offer, to, from: me }));
+
+        ws.send(JSON.stringify({
+          type: 'offer',
+          offer: offer,
+          to: peer,
+          from: currentUser
+        }));
+
+        addDiagnosticLog('Offer sent to peer');
+      } catch (error) {
+        addDiagnosticLog(`❌ Error creating offer: ${error.message}`);
+        alert(`Connection error: ${error.message}`);
       }
+    }
 
-      async function getOffer(offer, from) {
-        hide("select");
-        show("chatbox");
-        document.getElementById("stat").innerHTML = '<span class="green">✅ Connecting with ' + from + "...</span>";
+    // WebRTC - Handle offer (User responds)
+    async function handleOffer(offer, from) {
+      try {
+        connectedPeer = from;
+        showScreen('chatScreen');
+        addDiagnosticLog(`Received offer from ${from}`);
+        
+        document.getElementById('connectionStatus').innerHTML = 
+          `<span class="status-online">✅ Connecting with ${from}...</span>`;
 
-        loadHistory(from);
-
-        pc = new RTCPeerConnection(ice);
+        pc = new RTCPeerConnection(rtcConfig);
         iceQueue = [];
 
+        // Get user media
         try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: true,
+          addDiagnosticLog('Requesting camera and microphone...');
+          localStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: true
           });
 
-          stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-          document.getElementById("camctrl").classList.remove("hide");
-          console.log("✅ Camera accessed");
-        } catch (e) {
-          console.error("Camera error:", e);
-          alert("❌ Camera not available. Video won't work.\n\nMake sure:\n• You allowed camera permission\n• Page is using HTTPS\n• Camera is not used by another app");
+          localStream.getTracks().forEach(track => {
+            pc.addTrack(track, localStream);
+          });
+          addDiagnosticLog('✅ Camera and microphone ready');
+        } catch (error) {
+          addDiagnosticLog(`❌ Media error: ${error.message}`);
+          alert(`❌ Cannot access camera/microphone.\n\nMake sure:\n• You allowed permissions\n• No other app is using the camera\n• Page is using HTTPS\n\nError: ${error.name}`);
         }
 
-        pc.ondatachannel = (e) => {
-          dc = e.channel;
-          setupDC();
+        // Handle data channel
+        pc.ondatachannel = (event) => {
+          dataChannel = event.channel;
+          setupDataChannel();
         };
-        
-        pc.onicecandidate = (e) => {
-          if (e.candidate) ws.send(JSON.stringify({ type: "ice-candidate", candidate: e.candidate, to: from }));
+
+        // Handle ICE candidates
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            ws.send(JSON.stringify({
+              type: 'ice-candidate',
+              candidate: event.candidate,
+              to: from
+            }));
+          }
         };
 
         await pc.setRemoteDescription(offer);
-        iceQueue.forEach((c) => pc.addIceCandidate(new RTCIceCandidate(c)).catch((e) => console.log(e)));
+        
+        // Process queued ICE candidates
+        iceQueue.forEach(candidate => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate))
+            .catch(e => addDiagnosticLog(`ICE error: ${e.message}`));
+        });
         iceQueue = [];
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify({ type: "answer", answer, to: from, from: me }));
-      }
 
-      async function getAnswer(answer) {
+        ws.send(JSON.stringify({
+          type: 'answer',
+          answer: answer,
+          to: from,
+          from: currentUser
+        }));
+
+        addDiagnosticLog('Answer sent to peer');
+      } catch (error) {
+        addDiagnosticLog(`❌ Error handling offer: ${error.message}`);
+        alert(`Connection error: ${error.message}`);
+      }
+    }
+
+    async function handleAnswer(answer) {
+      try {
         await pc.setRemoteDescription(answer);
-        iceQueue.forEach((c) => pc.addIceCandidate(new RTCIceCandidate(c)).catch((e) => console.log(e)));
-        iceQueue = [];
-      }
-
-      function setupDC() {
-        dc.onopen = () => {
-          console.log("✅ Connected");
-          document.getElementById("stat").innerHTML = '<span class="green">✅ Connected with ' + fr + "</span>";
-        };
-        dc.onmessage = (e) => {
-          msg(e.data, "rcv", fr);
-          if (navigator.vibrate) navigator.vibrate(50);
-        };
-        dc.onclose = () => document.getElementById("stat").innerHTML = '<span class="red">⭕ Disconnected</span>';
-      }
-
-      function send() {
-        const input = document.getElementById("txt");
-        const t = input.value.trim();
-        if (!t || !dc || dc.readyState !== "open") return;
-
-        dc.send(t);
-        msg(t, "sent", "You");
-        input.value = "";
-        input.focus();
-      }
-
-      function msg(txt, type, name) {
-        displayMessage(txt, type, name, Date.now(), true);
-      }
-
-      function displayMessage(txt, type, name, timestamp, saveToHistory) {
-        const m = document.createElement("div");
-        m.className = "m " + type;
-        const time = new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        m.innerHTML = "<strong>" + name + '</strong><span class="txt">' + esc(txt) + '</span><span class="time">' + time + "</span>";
-
-        const chat = document.getElementById("msgs");
-        chat.appendChild(m);
-        chat.scrollTop = chat.scrollHeight;
-
-        if (saveToHistory && fr) {
-          saveMessage(fr, txt, type);
-        }
-      }
-
-      function stopCam() {
-        if (stream) {
-          stream.getTracks().forEach((t) => t.stop());
-          stream = null;
-          document.getElementById("camctrl").classList.add("hide");
-          alert("Camera stopped");
-        }
-      }
-
-      function disc() {
-        if (pc) pc.close();
-        if (stream) stream.getTracks().forEach((t) => t.stop());
-        document.getElementById("vid").classList.remove("on");
-        document.getElementById("msgs").innerHTML = "";
-        document.getElementById("historyInfo").classList.add("hide");
-        hide("chatbox");
-        show("select");
+        addDiagnosticLog('✅ Answer received and processed');
         
-        // Refresh online users when returning
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "get-online-users" }));
-        }
+        // Process queued ICE candidates
+        iceQueue.forEach(candidate => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate))
+            .catch(e => addDiagnosticLog(`ICE error: ${e.message}`));
+        });
+        iceQueue = [];
+      } catch (error) {
+        addDiagnosticLog(`❌ Error handling answer: ${error.message}`);
       }
+    }
 
-      function hide(id) {
-        document.getElementById(id).classList.add("hide");
+    function handleIceCandidate(candidate) {
+      if (pc && pc.remoteDescription) {
+        pc.addIceCandidate(new RTCIceCandidate(candidate))
+          .catch(e => addDiagnosticLog(`ICE error: ${e.message}`));
+      } else {
+        iceQueue.push(candidate);
+        addDiagnosticLog('ICE candidate queued');
       }
-      
-      function show(id) {
-        document.getElementById(id).classList.remove("hide");
-      }
-      
-      function esc(t) {
-        const d = document.createElement("div");
-        d.textContent = t;
-        return d.innerHTML;
-      }
+    }
 
-      window.onbeforeunload = () => {
-        if (ws) ws.close();
-        if (pc) pc.close();
-        if (stream) stream.getTracks().forEach((t) => t.stop());
-        clearInterval(refreshInterval);
+    // Data channel setup
+    function setupDataChannel() {
+      dataChannel.onopen = () => {
+        addDiagnosticLog('✅ Data channel open');
+        document.getElementById('connectionStatus').innerHTML = 
+          `<span class="status-online">✅ Connected with ${connectedPeer}</span>`;
       };
-    </script>
-  </body>
+
+      dataChannel.onmessage = (event) => {
+        displayMessage(event.data, 'received', connectedPeer);
+      };
+
+      dataChannel.onclose = () => {
+        addDiagnosticLog('Data channel closed');
+        document.getElementById('connectionStatus').innerHTML = 
+          '<span class="status-offline">⭕ Disconnected</span>';
+      };
+    }
+
+    // Messaging
+    function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      
+      if (!text || !dataChannel || dataChannel.readyState !== 'open') return;
+
+      dataChannel.send(text);
+      displayMessage(text, 'sent', 'You');
+      input.value = '';
+      input.focus();
+    }
+
+    function displayMessage(text, type, sender) {
+      const chatBox = document.getElementById('chatMessages');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message message-${type}`;
+      
+      const time = new Date().toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      messageDiv.innerHTML = `
+        <strong>${sender}</strong>
+        <span class="text">${escapeHtml(text)}</span>
+        <span class="time">${time}</span>
+      `;
+      
+      chatBox.appendChild(messageDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Disconnect
+    function disconnectChat() {
+      if (pc) pc.close();
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      
+      document.getElementById('videoContainer').classList.remove('active');
+      document.getElementById('chatMessages').innerHTML = '';
+      document.getElementById('diagnosticLog').classList.add('hide');
+      diagnosticLogs = [];
+
+      if (isAdmin) {
+        showScreen('adminDashboard');
+        requestUserList();
+      } else {
+        document.getElementById('connectionStatus').innerHTML = 
+          '<span style="color:#666">⏳ Waiting for admin to connect...</span>';
+      }
+    }
+
+    // Logout
+    function handleLogout() {
+      if (!confirm('Logout and return to login screen?')) return;
+
+      if (ws) ws.close();
+      if (pc) pc.close();
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+
+      localStorage.removeItem('chat_username');
+      localStorage.removeItem('chat_role');
+      localStorage.removeItem('chat_admin_pwd');
+
+      location.reload();
+    }
+
+    // Cleanup on page unload
+    window.onbeforeunload = () => {
+      if (ws) ws.close();
+      if (pc) pc.close();
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  </script>
+</body>
 </html>
