@@ -266,6 +266,8 @@
       display: flex;
       flex-direction: column;
       height: 100%;
+      overflow: hidden;
+      position: relative;
     }
 
     .chat-header {
@@ -276,6 +278,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-shrink: 0;
     }
 
     .status {
@@ -306,13 +309,14 @@
     .network-info {
       background: rgba(255,255,255,0.05);
       padding: 8px 15px;
-      margin: 10px 20px;
+      margin: 0 20px 10px 20px;
       border-radius: 10px;
       font-size: 12px;
       display: flex;
       align-items: center;
       gap: 10px;
       border: 1px solid rgba(255,255,255,0.1);
+      flex-shrink: 0;
     }
 
     .network-indicator {
@@ -337,6 +341,7 @@
       position: relative;
       max-height: 40vh;
       display: none;
+      flex-shrink: 0;
     }
 
     .video-wrap.active { display: block; }
@@ -375,10 +380,12 @@
     .messages {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 15px 20px;
       display: flex;
       flex-direction: column;
       gap: 10px;
+      min-height: 0;
     }
 
     .messages::-webkit-scrollbar { width: 5px; }
@@ -461,6 +468,8 @@
       background: rgba(255,255,255,0.05);
       backdrop-filter: blur(20px);
       border-top: 1px solid rgba(255,255,255,0.1);
+      flex-shrink: 0;
+      position: relative;
     }
 
     .input-wrap {
@@ -504,12 +513,13 @@
       border: 1px solid rgba(255,255,255,0.1);
       border-radius: 10px;
       padding: 10px;
-      margin: 10px 20px;
+      margin: 0 20px 10px 20px;
       max-height: 120px;
       overflow-y: auto;
       font-family: 'Courier New', monospace;
       font-size: 10px;
       color: rgba(255,255,255,0.7);
+      flex-shrink: 0;
     }
 
     .log { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
@@ -542,6 +552,30 @@
       .video-wrap { max-height: 35vh; }
       .input-area { padding: 10px 15px; }
     }
+    /* ===== FIX INPUT BAR PUSHING OUT ===== */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.input-area {
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
   </style>
 </head>
 <body>
