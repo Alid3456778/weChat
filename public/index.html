@@ -645,10 +645,21 @@
 
   <script>
     const ADMIN_PWD = "admin123";
-    const WS_URL = (() => {
-      const local = ['localhost', '127.0.0.1'].includes(location.hostname);
-      return local ? "ws://localhost:8080" : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
-    })();
+    // const WS_URL = (() => {
+    //   const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+    //   return local ? "ws://localhost:8080" : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+    // })();
+    // NEW
+const WS_URL = (() => {
+    const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+    // For Render.com or any production hosting: automatically use wss/ws based on protocol
+    if (!local) {
+        const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+        return `${protocol}://${location.host}`;
+    }
+    // For local development only
+    return "ws://localhost:8080";
+})();
 
     let ws, pc, dc, stream;
     let user = null, admin = false, peer = null;
