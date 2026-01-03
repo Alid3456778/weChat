@@ -422,15 +422,6 @@
       localStorage.setItem('chat_username', currentUser);
       localStorage.setItem('chat_role', role);
 
-      // Check permissions for admin before connecting
-      if (isAdmin) {
-        const hasPermissions = await checkMediaPermissions();
-        if (!hasPermissions) {
-          alert('❌ Camera/microphone access is required for admin role');
-          return;
-        }
-      }
-
       connectWebSocket();
     }
 
@@ -459,6 +450,43 @@
           <div class="alert alert-danger">
             ❌ <strong>Camera/Microphone Denied</strong><br>
             Please allow permissions in your browser settings and refresh the page.<br>
+            <small>Error: ${error.name}</small>
+          </div>
+        `;
+        return false;
+      }
+    }
+
+    // Check permissions for regular users (they need to share video)
+    async function checkMediaPermissionsForUser() {
+      const statusDiv = document.getElementById('connectionStatus');
+      statusDiv.innerHTML = '<div class="alert alert-warning">🔍 Checking camera/microphone permissions...</div>';
+
+      try {
+        addDiagnosticLog('Requesting media permissions for user...');
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: true, 
+          audio: true 
+        });
+        
+        // Keep the stream for later use
+        stream.getTracks().forEach(track => track.stop());
+        
+        statusDiv.innerHTML = '<div class="alert alert-success">✅ Camera and microphone ready! Waiting for admin to connect...</div>';
+        addDiagnosticLog('✅ Media permissions granted - ready to connect');
+        
+        setTimeout(() => {
+          statusDiv.innerHTML = '<span style="color:#666">⏳ Waiting for admin to connect...</span>';
+        }, 3000);
+        
+        return true;
+      } catch (error) {
+        addDiagnosticLog(`❌ Permission error: ${error.name}`);
+        statusDiv.innerHTML = `
+          <div class="alert alert-danger">
+            ❌ <strong>Camera/Microphone Access Required</strong><br>
+            You need to allow camera and microphone permissions to connect.<br>
+            Please allow permissions and refresh the page.<br>
             <small>Error: ${error.name}</small>
           </div>
         `;
@@ -539,6 +567,9 @@
         document.getElementById('connectionStatus').innerHTML = 
           '<span style="color:#666">⏳ Waiting for admin to connect...</span>';
         addDiagnosticLog('Waiting for admin connection...');
+        
+        // Check permissions for regular users when they login
+        checkMediaPermissionsForUser();
       }
     }
 
