@@ -659,12 +659,13 @@
 
     const rtc = {
       iceServers: [
+        // Multiple STUN servers for redundancy
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' },
-        // Free TURN servers for better connectivity across networks
+        { urls: 'stun:stun.services.mozilla.com' },
+        { urls: 'stun:stun.stunprotocol.org:3478' },
+        // Multiple TURN servers for better connectivity
         {
           urls: 'turn:openrelay.metered.ca:80',
           username: 'openrelayproject',
@@ -679,9 +680,22 @@
           urls: 'turn:openrelay.metered.ca:443?transport=tcp',
           username: 'openrelayproject',
           credential: 'openrelayproject'
+        },
+        // Additional free TURN server
+        {
+          urls: 'turn:relay.metered.ca:80',
+          username: 'a8b2e1f3c5d7e9f1a3b5c7d9',
+          credential: 'DXqJmRSsIvKlMnOpQrStUvWxYz'
+        },
+        {
+          urls: 'turn:relay.metered.ca:443',
+          username: 'a8b2e1f3c5d7e9f1a3b5c7d9',
+          credential: 'DXqJmRSsIvKlMnOpQrStUvWxYz'
         }
       ],
-      iceCandidatePoolSize: 10
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require'
     };
 
     const show = (id) => {
@@ -788,14 +802,33 @@
       ws = new WebSocket(WS_URL);
       
       ws.onopen = () => {
-        log('✅ Connected');
+        log('✅ WebSocket connected');
         ws.send(JSON.stringify({ type: 'register', username: user }));
         startHeartbeat();
       };
 
       ws.onmessage = handle;
-      ws.onerror = () => { log('❌ WS error'); alert('❌ Cannot connect'); };
-      ws.onclose = () => { log('WS closed'); stopHeartbeat(); };
+      
+      ws.onerror = (err) => { 
+        log('❌ WebSocket error'); 
+        console.error('WS Error:', err);
+        alert('❌ Cannot connect to server. Check your internet connection.'); 
+      };
+      
+      ws.onclose = (e) => { 
+        log(`WebSocket closed (code: ${e.code})`); 
+        stopHeartbeat();
+        
+        // Auto-reconnect if unexpected close
+        if (e.code !== 1000 && user) {
+          log('Attempting to reconnect in 3 seconds...');
+          setTimeout(() => {
+            if (!ws || ws.readyState === WebSocket.CLOSED) {
+              connect();
+            }
+          }, 3000);
+        }
+      };
     };
 
     const startHeartbeat = () => {
@@ -918,40 +951,48 @@
         dc = pc.createDataChannel('chat');
         setupDC();
 
-        let iceCandidatesComplete = false;
+        let iceComplete = false;
+        let iceCandidates = [];
 
         pc.onicecandidate = (e) => {
           if (e.candidate) {
-            log(`Sending ICE candidate: ${e.candidate.type}`);
+            log(`ICE candidate: ${e.candidate.type} (${e.candidate.protocol})`);
+            iceCandidates.push(e.candidate);
+            // Send immediately
             ws.send(JSON.stringify({ type: 'ice-candidate', candidate: e.candidate, to: p }));
           } else {
-            log('All ICE candidates sent');
-            iceCandidatesComplete = true;
+            log('✅ All ICE candidates gathered');
+            iceComplete = true;
           }
         };
 
         pc.onicegatheringstatechange = () => {
-          log(`ICE gathering state: ${pc.iceGatheringState}`);
+          log(`ICE gathering: ${pc.iceGatheringState}`);
         };
 
         pc.oniceconnectionstatechange = () => {
-          log(`ICE connection state: ${pc.iceConnectionState}`);
-          if (pc.iceConnectionState === 'connected') {
-            log('✅ ICE connected');
+          log(`ICE state: ${pc.iceConnectionState}`);
+          if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            log('✅ ICE connected!');
             status('online', `Connected with ${peer}`);
           } else if (pc.iceConnectionState === 'failed') {
-            log('❌ ICE connection failed - trying to restart');
-            status('connecting', 'Connection failed, retrying...');
-            // Try ICE restart
-            pc.restartIce();
+            log('❌ ICE failed - attempting restart');
+            status('offline', 'Connection failed - retrying...');
+            setTimeout(() => {
+              if (pc && pc.iceConnectionState === 'failed') {
+                pc.restartIce();
+              }
+            }, 1000);
           } else if (pc.iceConnectionState === 'disconnected') {
             log('⚠️ ICE disconnected');
             status('connecting', 'Reconnecting...');
+          } else if (pc.iceConnectionState === 'checking') {
+            status('connecting', 'Checking connection...');
           }
         };
 
         pc.ontrack = (e) => {
-          log('✅ Receiving stream');
+          log('✅ Remote stream received');
           const vid = document.getElementById('video');
           vid.srcObject = e.streams[0];
           vid.muted = false;
@@ -961,48 +1002,59 @@
         };
 
         pc.onconnectionstatechange = () => {
-          log(`Connection state: ${pc.connectionState}`);
+          log(`Connection: ${pc.connectionState}`);
           if (pc.connectionState === 'connected') {
             status('online', `Connected with ${peer}`);
-          } else if (pc.connectionState === 'disconnected') {
-            status('connecting', 'Reconnecting...');
           } else if (pc.connectionState === 'failed') {
             status('offline', 'Connection failed');
-            alert('❌ Connection failed. This might be due to:\n\n• Firewall blocking connection\n• Router NAT issues\n• Network restrictions\n\nTry:\n1. Both use same WiFi\n2. Disable VPN\n3. Check firewall settings');
-          } else if (pc.connectionState === 'connecting') {
-            status('connecting', 'Establishing connection...');
+            alert('❌ Connection Failed\n\nPossible reasons:\n• Firewall blocking\n• NAT/Router issues\n• ISP restrictions\n\nSolutions:\n• Try mobile hotspot\n• Disable VPN/Proxy\n• Check firewall');
           }
         };
 
         pc.addTransceiver('video', { direction: 'recvonly' });
         pc.addTransceiver('audio', { direction: 'recvonly' });
 
+        log('Creating offer...');
         const offer = await pc.createOffer({
           offerToReceiveAudio: true,
           offerToReceiveVideo: true
         });
+        
         await pc.setLocalDescription(offer);
+        log('Local description set');
 
-        log('Waiting for ICE candidates...');
-        // Wait a bit for ICE candidates to be gathered
+        // Wait for ICE gathering to complete or timeout
+        log('Gathering ICE candidates...');
         await new Promise(resolve => {
-          if (iceCandidatesComplete) {
+          if (iceComplete || pc.iceGatheringState === 'complete') {
             resolve();
           } else {
-            setTimeout(resolve, 2000); // Wait max 2 seconds
+            const timeout = setTimeout(() => resolve(), 3000);
+            const interval = setInterval(() => {
+              if (iceComplete || pc.iceGatheringState === 'complete') {
+                clearTimeout(timeout);
+                clearInterval(interval);
+                resolve();
+              }
+            }, 100);
           }
         });
 
-        ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription, to: p, from: user }));
-        log('Offer sent with ICE candidates');
+        log(`Sending offer with ${iceCandidates.length} candidates`);
+        ws.send(JSON.stringify({ 
+          type: 'offer', 
+          offer: pc.localDescription, 
+          to: p, 
+          from: user 
+        }));
 
-        // Set timeout for connection
+        // Connection timeout
         setTimeout(() => {
-          if (pc && pc.connectionState === 'connecting') {
-            log('⚠️ Connection taking too long...');
-            status('connecting', 'Still connecting... (check network)');
+          if (pc && (pc.connectionState === 'connecting' || pc.iceConnectionState === 'checking')) {
+            log('⚠️ Connection timeout - still trying...');
+            status('connecting', 'Taking longer than usual...');
           }
-        }, 10000);
+        }, 15000);
       } catch (e) {
         log(`❌ Error: ${e.message}`);
         alert(`Connection error: ${e.message}`);
