@@ -645,21 +645,10 @@
 
   <script>
     const ADMIN_PWD = "admin123";
-    // const WS_URL = (() => {
-    //   const local = ['localhost', '127.0.0.1'].includes(location.hostname);
-    //   return local ? "ws://localhost:8080" : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
-    // })();
-    // NEW
-const WS_URL = (() => {
-    const local = ['localhost', '127.0.0.1'].includes(location.hostname);
-    // For Render.com or any production hosting: automatically use wss/ws based on protocol
-    if (!local) {
-        const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-        return `${protocol}://${location.host}`;
-    }
-    // For local development only
-    return "ws://localhost:8080";
-})();
+    const WS_URL = (() => {
+      const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+      return local ? "ws://localhost:8080" : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+    })();
 
     let ws, pc, dc, stream;
     let user = null, admin = false, peer = null;
@@ -675,7 +664,6 @@ const WS_URL = (() => {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:global.stun.twilio.com:3478' },
         // Free TURN servers for better connectivity across networks
         {
           urls: 'turn:openrelay.metered.ca:80',
@@ -691,24 +679,7 @@ const WS_URL = (() => {
           urls: 'turn:openrelay.metered.ca:443?transport=tcp',
           username: 'openrelayproject',
           credential: 'openrelayproject'
-        },
-        // Add this backup TURN server
-    {
-      urls: 'turn:numb.viagenie.ca',
-      username: 'webrtc@live.com',
-      credential: 'muazkh'
-    },
-    // Backup TURN servers
-    {
-      urls: 'turn:numb.viagenie.ca',
-      username: 'webrtc@live.com',
-      credential: 'muazkh'
-    },
-    {
-      urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
-      username: 'webrtc',
-      credential: 'webrtc'
-    }
+        }
       ],
       iceCandidatePoolSize: 10
     };
@@ -943,25 +914,6 @@ const WS_URL = (() => {
         log('Creating peer connection...');
         pc = new RTCPeerConnection(rtc);
         iceQ = [];
-        pc.oniceconnectionstatechange = () => {
-    console.log('🧊 ICE State:', pc.iceConnectionState);
-    
-    if (pc.iceConnectionState === 'failed') {
-        console.error('❌ TURN server not working!');
-        pc.restartIce();
-    }
-};
-
-pc.onicecandidate = (event) => {
-    if (event.candidate) {
-        console.log('🎯 Type:', event.candidate.type);
-        
-        if (event.candidate.type === 'relay') {
-            console.log('✅ TURN working!');
-        }
-    }
-    // ... your existing code ...
-};
 
         dc = pc.createDataChannel('chat');
         setupDC();
