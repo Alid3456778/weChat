@@ -891,6 +891,26 @@
             username: "e8b3d44a0f4d9c8e5a6f7b8c",
             credential: "XrT9kLmNpQs2WvYz",
           },
+          // STUN (free)
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+
+    // TURN (Metered - WORKING)
+    {
+      urls: "turn:global.relay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    },
+    {
+      urls: "turn:global.relay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    },
+    {
+      urls: "turn:global.relay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    },
         ],
         iceCandidatePoolSize: 10,
         bundlePolicy: "max-bundle",
