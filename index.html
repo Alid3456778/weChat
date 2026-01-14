@@ -421,7 +421,7 @@
       </div>
     </div>
 
-    <script>
+    <!-- <script>
       // Configuration
       const ADMIN_PASSWORD = "admin123"; // Change this password as needed
       const WS_URL = "wss://wechat-xhvo.onrender.com"; // Your Render WebSocket URL
@@ -1000,6 +1000,297 @@
         }
         stopVideo();
       });
-    </script>
-  </body>
+    </script> -->
+ <script>
+    // Configuration
+const ADMIN_PASSWORD = "admin123"; 
+// Dynamic URL: Works for both local testing and production
+const WS_URL = window.location.protocol === 'https:' ? 
+               "wss://wechat-xhvo.onrender.com" : "ws://localhost:3000";
+
+// Global variables
+let ws = null;
+let currentUser = { id: null, username: "", type: "user" };
+let selectedUser = null;
+let messages = [];
+let localStream = null;
+let peerConnection = null;
+let pendingCandidates = []; // NEW: Queue for ICE candidates
+
+const iceServers = {
+    iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+        },
+    ],
+};
+
+// DOM Elements
+const loginScreen = document.getElementById("loginScreen");
+const lobbyScreen = document.getElementById("lobbyScreen");
+const chatScreen = document.getElementById("chatScreen");
+const usernameInput = document.getElementById("usernameInput");
+const passwordInput = document.getElementById("passwordInput");
+const passwordGroup = document.getElementById("passwordGroup");
+const userList = document.getElementById("userList");
+const messagesDiv = document.getElementById("messages");
+const messageInput = document.getElementById("messageInput");
+const remoteVideo = document.getElementById("remoteVideo");
+const videoSection = document.getElementById("videoSection");
+const noVideoMessage = document.getElementById("noVideoMessage");
+
+document.querySelectorAll('input[name="userType"]').forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+        passwordGroup.classList.toggle("hidden", e.target.value !== "admin");
+    });
+});
+
+function handleLogin() {
+    const username = usernameInput.value.trim();
+    const userType = document.querySelector('input[name="userType"]:checked').value;
+    const password = passwordInput.value;
+
+    if (!username) return alert("Please enter your name");
+    if (userType === "admin" && password !== ADMIN_PASSWORD) return alert("Incorrect admin password");
+
+    currentUser.username = username;
+    currentUser.type = userType;
+    connectWebSocket();
+}
+
+function connectWebSocket() {
+    ws = new WebSocket(WS_URL);
+    ws.onopen = () => {
+        ws.send(JSON.stringify({
+            type: "join",
+            username: currentUser.username,
+            userType: currentUser.type,
+        }));
+        showLobby();
+    };
+    ws.onmessage = (event) => handleWebSocketMessage(JSON.parse(event.data));
+    ws.onerror = () => alert("Connection error. Is the server running?");
+}
+
+function handleWebSocketMessage(data) {
+    switch (data.type) {
+        case "welcome": currentUser.id = data.userId; break;
+        case "userList": updateUserList(data.users); break;
+        case "queuePosition": updateQueuePosition(data.position); break;
+        case "chatStarted": startChat(data.with, data.messages); break;
+        case "message": receiveMessage(data); break;
+        case "chatEnded": handleChatEnded(data); break;
+        case "offer": handleOffer(data.offer, data.from); break;
+        case "answer": handleAnswer(data.answer); break;
+        case "iceCandidate": handleIceCandidate(data.candidate); break;
+        case "videoRequest": if (currentUser.type === "user") startVideo(); break;
+        case "error": alert(data.message); break;
+    }
+}
+
+function showLobby() {
+    loginScreen.classList.add("hidden");
+    lobbyScreen.classList.remove("hidden");
+    chatScreen.classList.add("hidden");
+    document.getElementById("lobbyTitle").textContent = currentUser.type === "admin" ? "Admin Lobby" : "User Lobby";
+    document.getElementById("lobbyUsername").textContent = `Logged in as: ${currentUser.username}`;
+}
+
+function updateUserList(users) {
+    if (currentUser.type !== "admin") return;
+    userList.innerHTML = "";
+    users.forEach((user) => {
+        if (user.type === "user") {
+            const userItem = document.createElement("div");
+            userItem.className = "user-item online";
+            userItem.innerHTML = `<strong>${user.username}</strong><div style="font-size: 0.8em; color: #666;">Click to chat</div>`;
+            userItem.onclick = () => selectUser(user);
+            userList.appendChild(userItem);
+        }
+    });
+}
+
+function selectUser(user) {
+    ws.send(JSON.stringify({ type: "selectUser", userId: user.id }));
+}
+
+function startChat(user, chatMessages) {
+    selectedUser = user;
+    messages = chatMessages || [];
+    lobbyScreen.classList.add("hidden");
+    chatScreen.classList.remove("hidden");
+    document.getElementById("chatWith").textContent = `Chatting with ${user.username}`;
+    displayMessages();
+
+    if (currentUser.type === "admin") {
+        videoSection.classList.remove("hidden");
+        noVideoMessage.classList.remove("hidden");
+        setTimeout(() => {
+            ws.send(JSON.stringify({ type: "requestVideo", userId: user.id }));
+        }, 1000);
+    } else {
+        videoSection.classList.add("hidden");
+    }
+}
+
+async function startVideo() {
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        createPeerConnection();
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        ws.send(JSON.stringify({ type: "offer", offer: offer, to: selectedUser.id }));
+    } catch (error) {
+        console.error("Media Error:", error);
+        alert("Camera access denied.");
+    }
+}
+
+function createPeerConnection() {
+    peerConnection = new RTCPeerConnection(iceServers);
+
+    if (localStream && currentUser.type === "user") {
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    }
+
+    peerConnection.ontrack = (event) => {
+        remoteVideo.srcObject = event.streams[0];
+        noVideoMessage.classList.add("hidden");
+    };
+
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate && selectedUser) {
+            ws.send(JSON.stringify({
+                type: "iceCandidate",
+                candidate: event.candidate,
+                to: selectedUser.id
+            }));
+        }
+    };
+}
+
+async function handleOffer(offer, from) {
+    if (currentUser.type !== "admin") return;
+    try {
+        createPeerConnection();
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        
+        ws.send(JSON.stringify({ type: "answer", answer: answer, to: from }));
+
+        // Process any candidates that arrived early
+        while (pendingCandidates.length > 0) {
+            await peerConnection.addIceCandidate(pendingCandidates.shift());
+        }
+    } catch (error) {
+        console.error("Offer Error:", error);
+    }
+}
+
+async function handleAnswer(answer) {
+    try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        while (pendingCandidates.length > 0) {
+            await peerConnection.addIceCandidate(pendingCandidates.shift());
+        }
+    } catch (error) {
+        console.error("Answer Error:", error);
+    }
+}
+
+async function handleIceCandidate(candidate) {
+    try {
+        const iceCand = new RTCIceCandidate(candidate);
+        if (peerConnection && peerConnection.remoteDescription) {
+            await peerConnection.addIceCandidate(iceCand);
+        } else {
+            pendingCandidates.push(iceCand);
+        }
+    } catch (error) {
+        console.error("ICE Error:", error);
+    }
+}
+
+function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text || !ws) return;
+    ws.send(JSON.stringify({ type: "message", text: text, to: selectedUser.id }));
+    const msg = { from: currentUser.username, text: text, timestamp: new Date().toISOString() };
+    messages.push(msg);
+    addMessageToUI(msg);
+    messageInput.value = "";
+}
+
+function receiveMessage(data) {
+    const msg = { from: data.from, text: data.text, timestamp: data.timestamp };
+    messages.push(msg);
+    addMessageToUI(msg);
+}
+
+function displayMessages() {
+    messagesDiv.innerHTML = "";
+    messages.forEach(addMessageToUI);
+}
+
+function addMessageToUI(msg) {
+    const messageDiv = document.createElement("div");
+    messageDiv.className = `message ${msg.from === currentUser.username ? "self" : "other"}`;
+    const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    messageDiv.innerHTML = `
+        <div class="message-sender">${msg.from}</div>
+        <div class="message-bubble">${escapeHtml(msg.text)}</div>
+        <div class="message-time">${time}</div>`;
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function handleKeyPress(e) { if (e.key === "Enter") sendMessage(); }
+
+function endChat() {
+    ws.send(JSON.stringify({ type: "endChat", userId: selectedUser?.id }));
+    cleanupChat();
+    showLobby();
+}
+
+function handleChatEnded(data) {
+    cleanupChat();
+    showLobby();
+    if (currentUser.type === "user" && data.queuePosition) updateQueuePosition(data.queuePosition);
+}
+
+function cleanupChat() {
+    selectedUser = null;
+    messages = [];
+    pendingCandidates = [];
+    if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+    }
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+    remoteVideo.srcObject = null;
+}
+
+function logout() {
+    if (ws) ws.close();
+    cleanupChat();
+    location.reload(); 
+}
+
+window.onbeforeunload = () => { if (ws) ws.close(); };
+ </script>
+</body>
 </html>
