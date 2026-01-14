@@ -1,1689 +1,246 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"
-    />
-    <title>WebRTC Chat</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          sans-serif;
-        background: #0a0e27;
-        color: #fff;
-        height: 100vh;
-        overflow: hidden;
-      }
-
-      body::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        background: linear-gradient(
-          135deg,
-          #667eea 0%,
-          #764ba2 50%,
-          #f093fb 100%
-        );
-        opacity: 0.1;
-        z-index: 0;
-      }
-
-      .app {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        position: relative;
-        z-index: 1;
-      }
-
-      /* Header */
-      .header {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(20px);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 12px 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .header-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .logo {
-        font-size: 20px;
-        font-weight: 700;
-        background: linear-gradient(135deg, #667eea, #f093fb);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-
-      .badge {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        padding: 4px 12px;
-        border-radius: 15px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-      }
-
-      .icon-btn {
-        background: rgba(255, 255, 255, 0.1);
-        border: none;
-        color: #fff;
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        cursor: pointer;
-        transition: all 0.3s;
-        font-size: 16px;
-      }
-
-      .icon-btn:hover {
-        background: rgba(255, 255, 255, 0.2);
-        transform: scale(1.1);
-      }
-
-      /* Content */
-      .content {
-        flex: 1;
-        overflow: hidden;
-      }
-
-      /* Login */
-      .login {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        padding: 20px;
-      }
-
-      .login-box {
-        background: rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(30px);
-        border-radius: 20px;
-        padding: 35px 25px;
-        width: 100%;
-        max-width: 380px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-      }
-
-      .login-title {
-        text-align: center;
-        font-size: 26px;
-        font-weight: 700;
-        margin-bottom: 8px;
-        background: linear-gradient(135deg, #667eea, #f093fb);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-
-      .login-subtitle {
-        text-align: center;
-        font-size: 13px;
-        color: rgba(255, 255, 255, 0.6);
-        margin-bottom: 25px;
-      }
-
-      input,
-      select {
-        width: 100%;
-        padding: 13px 16px;
-        background: rgba(255, 255, 255, 0.1);
-        border: 2px solid rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        color: #fff;
-        font-size: 14px;
-        margin-bottom: 12px;
-        transition: all 0.3s;
-        outline: none;
-      }
-
-      input::placeholder {
-        color: rgba(255, 255, 255, 0.4);
-      }
-      input:focus,
-      select:focus {
-        border-color: #667eea;
-        background: rgba(255, 255, 255, 0.15);
-      }
-      select {
-        cursor: pointer;
-      }
-      select option {
-        background: #1a1f3a;
-      }
-
-      .btn {
-        width: 100%;
-        padding: 13px;
-        border: none;
-        border-radius: 10px;
-        font-size: 15px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-      }
-
-      .btn-primary {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: #fff;
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
-      }
-
-      .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 28px rgba(102, 126, 234, 0.4);
-      }
-
-      .btn-secondary {
-        background: rgba(255, 255, 255, 0.1);
-        color: #fff;
-        border: 2px solid rgba(255, 255, 255, 0.2);
-      }
-
-      .alert {
-        padding: 10px 14px;
-        border-radius: 10px;
-        font-size: 12px;
-        line-height: 1.5;
-        margin-bottom: 15px;
-        border-left: 3px solid;
-      }
-
-      .alert-info {
-        background: rgba(99, 179, 237, 0.15);
-        border-color: #63b3ed;
-        color: #bee3f8;
-      }
-      .alert-success {
-        background: rgba(72, 187, 120, 0.15);
-        border-color: #48bb78;
-        color: #9ae6b4;
-      }
-      .alert-warning {
-        background: rgba(237, 137, 54, 0.15);
-        border-color: #ed8936;
-        color: #fbd38d;
-      }
-      .alert-danger {
-        background: rgba(245, 101, 101, 0.15);
-        border-color: #f56565;
-        color: #fc8181;
-      }
-
-      /* User List */
-      .user-list {
-        padding: 20px;
-        height: 100%;
-        overflow-y: auto;
-      }
-
-      .user-list-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-      }
-
-      .user-list-title {
-        font-size: 18px;
-        font-weight: 700;
-      }
-      .refresh-time {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.5);
-      }
-
-      .user-card {
-        background: rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 14px;
-        padding: 14px 16px;
-        margin-bottom: 10px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-        transition: all 0.3s;
-      }
-
-      .user-card:hover {
-        background: rgba(102, 126, 234, 0.2);
-        border-color: #667eea;
-        transform: translateX(4px);
-      }
-
-      .user-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .user-avatar {
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-        font-weight: 700;
-        position: relative;
-      }
-
-      .online-dot {
-        position: absolute;
-        bottom: 0;
-        right: 0;
-        width: 12px;
-        height: 12px;
-        background: #48bb78;
-        border: 2px solid #0a0e27;
-        border-radius: 50%;
-        animation: pulse 2s infinite;
-      }
-
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 1;
-          box-shadow: 0 0 0 0 rgba(72, 187, 120, 0.7);
-        }
-        50% {
-          opacity: 0.8;
-          box-shadow: 0 0 0 6px rgba(72, 187, 120, 0);
-        }
-      }
-
-      .user-name {
-        font-size: 15px;
-        font-weight: 600;
-      }
-      .user-status {
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.6);
-        margin-top: 2px;
-      }
-
-      /* Chat */
-      .chat {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        overflow: hidden;
-        position: relative;
-      }
-
-      .chat-header {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(20px);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 12px 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-shrink: 0;
-      }
-
-      .status {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        animation: pulse 2s infinite;
-      }
-
-      .status-dot.online {
-        background: #48bb78;
-      }
-      .status-dot.connecting {
-        background: #ed8936;
-        animation: blink 1s infinite;
-      }
-      .status-dot.offline {
-        background: #f56565;
-        animation: none;
-      }
-
-      @keyframes blink {
-        0%,
-        50% {
-          opacity: 1;
-        }
-        51%,
-        100% {
-          opacity: 0.3;
-        }
-      }
-
-      .status-text {
-        font-size: 13px;
-        font-weight: 500;
-      }
-
-      /* Network indicator */
-      .network-info {
-        background: rgba(255, 255, 255, 0.05);
-        padding: 8px 15px;
-        margin: 0 20px 10px 20px;
-        border-radius: 10px;
-        font-size: 12px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        flex-shrink: 0;
-      }
-
-      .network-indicator {
-        display: flex;
-        gap: 3px;
-      }
-
-      .bar {
-        width: 4px;
-        height: 12px;
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 2px;
-      }
-
-      .bar.active {
-        background: #48bb78;
-      }
-      .bar.medium {
-        background: #ed8936;
-      }
-      .bar.poor {
-        background: #f56565;
-      }
-
-      /* Video */
-      .video-wrap {
-        background: #000;
-        position: relative;
-        max-height: 40vh;
-        display: none;
-        flex-shrink: 0;
-      }
-
-      .video-wrap.active {
-        display: block;
-      }
-
-      .video-wrap video {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-      }
-
-      .video-label {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        background: rgba(0, 0, 0, 0.7);
-        backdrop-filter: blur(10px);
-        color: #fff;
-        padding: 6px 14px;
-        border-radius: 18px;
-        font-size: 12px;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .live-dot {
-        width: 8px;
-        height: 8px;
-        background: #f56565;
-        border-radius: 50%;
-        animation: blink 1s infinite;
-      }
-
-      /* Messages */
-      .messages {
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding: 15px 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        min-height: 0;
-      }
-
-      .messages::-webkit-scrollbar {
-        width: 5px;
-      }
-      .messages::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-      }
-      .messages::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-      }
-
-      .msg {
-        display: flex;
-        animation: slideUp 0.3s ease;
-      }
-
-      @keyframes slideUp {
-        from {
-          opacity: 0;
-          transform: translateY(8px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      .msg-sent {
-        justify-content: flex-end;
-      }
-      .msg-received {
-        justify-content: flex-start;
-      }
-
-      .bubble {
-        max-width: 70%;
-        padding: 10px 14px;
-        border-radius: 16px;
-        word-wrap: break-word;
-      }
-
-      .msg-sent .bubble {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: #fff;
-        border-bottom-right-radius: 4px;
-      }
-
-      .msg-received .bubble {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: #fff;
-        border-bottom-left-radius: 4px;
-      }
-
-      .msg-sender {
-        font-size: 11px;
-        font-weight: 600;
-        margin-bottom: 3px;
-        opacity: 0.8;
-      }
-      .msg-text {
-        font-size: 14px;
-        line-height: 1.4;
-      }
-      .msg-time {
-        font-size: 10px;
-        opacity: 0.6;
-        margin-top: 3px;
-      }
-
-      .typing {
-        display: none;
-        padding: 8px 14px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        width: fit-content;
-        border-bottom-left-radius: 4px;
-      }
-
-      .typing.active {
-        display: block;
-      }
-
-      .typing-dots {
-        display: flex;
-        gap: 4px;
-      }
-
-      .dot {
-        width: 6px;
-        height: 6px;
-        background: rgba(255, 255, 255, 0.6);
-        border-radius: 50%;
-        animation: typing 1.4s infinite;
-      }
-
-      .dot:nth-child(2) {
-        animation-delay: 0.2s;
-      }
-      .dot:nth-child(3) {
-        animation-delay: 0.4s;
-      }
-
-      @keyframes typing {
-        0%,
-        60%,
-        100% {
-          transform: translateY(0);
-        }
-        30% {
-          transform: translateY(-8px);
-        }
-      }
-
-      /* Input */
-      .input-area {
-        padding: 12px 20px;
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(20px);
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        flex-shrink: 0;
-        position: relative;
-      }
-
-      .input-wrap {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-
-      .input-wrap input {
-        flex: 1;
-        margin: 0;
-        padding: 11px 16px;
-        border-radius: 22px;
-      }
-
-      .send-btn {
-        width: 44px;
-        height: 44px;
-        min-width: 44px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        border: none;
-        color: #fff;
-        font-size: 18px;
-        cursor: pointer;
-        transition: all 0.3s;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-      }
-
-      .send-btn:hover {
-        transform: scale(1.1);
-        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-      }
-
-      .send-btn:active {
-        transform: scale(0.95);
-      }
-
-      /* Diagnostic */
-      .diagnostic {
-        background: rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        padding: 10px;
-        margin: 0 20px 10px 20px;
-        max-height: 120px;
-        overflow-y: auto;
-        font-family: "Courier New", monospace;
-        font-size: 10px;
-        color: rgba(255, 255, 255, 0.7);
-        flex-shrink: 0;
-      }
-
-      .log {
-        padding: 3px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      }
-      .log:last-child {
-        border-bottom: none;
-      }
-
-      .hide {
-        display: none !important;
-      }
-
-      .empty {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        padding: 40px 20px;
-        text-align: center;
-      }
-
-      .empty-icon {
-        font-size: 48px;
-        margin-bottom: 12px;
-        opacity: 0.3;
-      }
-      .empty-text {
-        font-size: 14px;
-        color: rgba(255, 255, 255, 0.6);
-      }
-
-      /* Mobile */
-      @media (max-width: 768px) {
-        .header {
-          padding: 10px 15px;
-        }
-        .logo {
-          font-size: 18px;
-        }
-        .badge {
-          font-size: 10px;
-          padding: 3px 10px;
-        }
-        .login-box {
-          padding: 28px 20px;
-        }
-        .user-list {
-          padding: 15px;
-        }
-        .messages {
-          padding: 12px 15px;
-        }
-        .bubble {
-          max-width: 85%;
-          padding: 9px 12px;
-        }
-        .video-wrap {
-          max-height: 35vh;
-        }
-        .input-area {
-          padding: 10px 15px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="app">
-      <div class="header">
-        <div class="header-left">
-          <div class="logo">💬 Chat</div>
-          <div id="badge" class="badge hide"></div>
-        </div>
-        <button
-          id="logoutBtn"
-          class="icon-btn hide"
-          onclick="logout()"
-          title="Logout"
-        >
-          ↩
-        </button>
-      </div>
-
-      <div class="content">
-        <!-- Login -->
-        <div id="loginScreen">
-          <div class="login">
-            <div class="login-box">
-              <div class="login-title">Welcome</div>
-              <div class="login-subtitle">Choose role to continue</div>
-              <div id="loginAlert" class="hide"></div>
-              <select id="role" onchange="togglePwd()">
-                <option value="user">👤 User</option>
-                <option value="admin">👑 Admin</option>
-              </select>
-              <input type="text" id="username" placeholder="Username" />
-              <input
-                type="password"
-                id="password"
-                class="hide"
-                placeholder="Admin password"
-              />
-              <button class="btn btn-primary" onclick="login()">Connect</button>
-              <div class="alert alert-info">💡 Session saved automatically</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Admin Dashboard -->
-        <div id="dashboard" class="hide">
-          <div class="user-list">
-            <div class="user-list-header">
-              <div class="user-list-title">👥 Online Users</div>
-              <div class="refresh-time" id="refreshTime"></div>
-            </div>
-            <div id="userList"></div>
-          </div>
-        </div>
-
-        <!-- Chat -->
-        <div id="chatScreen" class="hide">
-          <div class="chat">
-            <div class="chat-header">
-              <div class="status">
-                <div id="statusDot" class="status-dot connecting"></div>
-                <div id="statusText" class="status-text">Connecting...</div>
-              </div>
-              <button class="icon-btn" onclick="disconnect()" title="Back">
-                ←
-              </button>
-            </div>
-
-            <div id="networkInfo" class="network-info hide">
-              <div class="network-indicator" id="networkBars"></div>
-              <span id="networkText"></span>
-            </div>
-
-            <div id="diagnostic" class="diagnostic hide"></div>
-
-            <div id="videoWrap" class="video-wrap">
-              <video id="video" autoplay playsinline></video>
-              <div class="video-label">
-                <div class="live-dot"></div>
-                <span id="videoLabel">LIVE</span>
-              </div>
-            </div>
-
-            <div class="messages" id="messages">
-              <div id="typing" class="typing">
-                <div class="typing-dots">
-                  <div class="dot"></div>
-                  <div class="dot"></div>
-                  <div class="dot"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="input-area">
-              <div class="input-wrap">
-                <input
-                  type="text"
-                  id="msgInput"
-                  placeholder="Type message..."
-                  oninput="handleTyping()"
-                  onkeypress="if(event.key==='Enter')send()"
-                />
-                <button class="send-btn" onclick="send()">➤</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Chat Test</title>
+  <link rel="icon" href="data:;base64,iVBORw0KGgo="> <!-- Fixes favicon 404 -->
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0d1418; color: #e4e7ea; height: 100vh; overflow: hidden; }
+    #entry { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; gap: 20px; }
+    input, select, button { padding: 15px; border: none; border-radius: 25px; font-size: 16px; width: 280px; max-width: 90vw; }
+    input { background: #202c33; color: #e4e7ea; }
+    button { background: #00d4aa; color: #000; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+    button:hover { background: #00bf94; }
+    button:disabled { background: #404c55; cursor: not-allowed; }
+    #lobby, #chat { display: none; height: 100vh; flex-direction: column; }
+    #lobby { background: #0d1418; }
+    #users { flex: 1; padding: 20px; overflow-y: auto; }
+    .user { display: flex; align-items: center; gap: 15px; padding: 15px; background: #202c33; margin-bottom: 10px; border-radius: 12px; cursor: pointer; transition: background 0.2s; }
+    .user:hover { background: #2a3942; }
+    .user.admin { border-left: 4px solid #00d4aa; }
+    .user.user { border-left: 4px solid #f79b4f; }
+    .status { font-size: 12px; opacity: 0.7; }
+    #chat { background: #0d1418; background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,0.02) 20px); }
+    #video-admin { display: none; width: 100%; height: 200px; background: #000; border-radius: 0 0 20px 20px; object-fit: cover; }
+    #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .message { max-width: 70%; padding: 10px 15px; border-radius: 18px; }
+    .message.sent { align-self: flex-end; background: #00d4aa; color: #000; border-bottom-right-radius: 4px; }
+    .message.received { align-self: flex-start; background: #2a3942; border-bottom-left-radius: 4px; }
+    .input-group { padding: 20px; display: flex; gap: 10px; background: #161f27; }
+    #messageInput { flex: 1; }
+    .online-dot { width: 10px; height: 10px; background: #00d4aa; border-radius: 50%; animation: blink 1.5s infinite; }
+    @keyframes blink { 0%, 80%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="entry">
+    <h1>Student Chat Test</h1>
+    <input id="nameInput" placeholder="Enter your name" value="">
+    <select id="roleSelect">
+      <option value="user">User (Student)</option>
+      <option value="admin">Admin (Teacher)</option>
+    </select>
+    <input id="adminPass" class="hidden" type="password" placeholder="Admin Password">
+    <button id="joinBtn">Join Lobby</button>
+  </div>
+  <div id="lobby">
+    <div style="padding: 20px; background: #161f27; border-bottom: 1px solid #2a3942;">
+      <span id="currentUser"></span> | <span id="status">Connecting...</span>
     </div>
+    <div id="users"></div>
+  </div>
+  <div id="chat">
+    <video id="video-admin" autoplay playsinline muted></video>
+    <div id="messages"></div>
+    <div class="input-group">
+      <input id="messageInput" placeholder="Type a message..." />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
 
-    <script>
-      const ADMIN_PWD = "admin123";
-      const WS_URL = (() => {
-        const local = ["localhost", "127.0.0.1"].includes(location.hostname);
-        return local
-          ? "ws://localhost:8080"
-          : `${location.protocol === "https:" ? "wss" : "ws"}://${
-              location.host
-            }`;
-      })();
+  <script>
+    (function() {  // IIFE fixes scope issues [memory:3]
+      const ADMIN_PASS = 'admin123'; // Change this
+      const WS_URL = window.location.hostname === 'localhost' ? 'ws://localhost:8080' : `wss://${window.location.host}`;
+      let ws, myId = crypto.randomUUID(), name, role, peer = null, dataChannel = null, currentRoom = null;
+      
+      const entry = document.getElementById('entry');
+      const lobby = document.getElementById('lobby');
+      const chat = document.getElementById('chat');
+      const nameInput = document.getElementById('nameInput');
+      const roleSelect = document.getElementById('roleSelect');
+      const adminPass = document.getElementById('adminPass');
+      const joinBtn = document.getElementById('joinBtn');
 
-      let ws, pc, dc, stream;
-      let user = null,
-        admin = false,
-        peer = null;
-      let iceQ = [],
-        logs = [];
-      let typingTimer,
-        peerTyping = false;
-      let lastPing = Date.now();
-      let pingInterval, statsInterval;
+      // Load saved name
+      const savedName = localStorage.getItem('chatName');
+      if (savedName) nameInput.value = savedName;
 
-      const rtc = {
-        iceServers: [
-          // Google STUN servers
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:stun2.l.google.com:19302" },
-          { urls: "stun:stun3.l.google.com:19302" },
-          { urls: "stun:stun4.l.google.com:19302" },
+      roleSelect.onchange = () => adminPass.classList.toggle('hidden', roleSelect.value !== 'admin');
+      
+      joinBtn.onclick = joinLobby;
 
-          // Twilio STUN
-          { urls: "stun:global.stun.twilio.com:3478" },
+      window.joinLobby = joinLobby;  // Global fallback
+      window.sendMessage = sendMessage;
 
-          // OpenRelay TURN (Free, no auth required)
-          { urls: "turn:openrelay.metered.ca:80" },
-          { urls: "turn:openrelay.metered.ca:443" },
-          { urls: "turn:openrelay.metered.ca:443?transport=tcp" },
-
-          // Alternative free TURN servers
-          {
-            urls: "turn:numb.viagenie.ca",
-            username: "webrtc@live.com",
-            credential: "muazkh",
-          },
-          {
-            urls: "turn:turn.bistri.com:80",
-            username: "homeo",
-            credential: "homeo",
-          },
-
-          // Metered TURN (more reliable)
-          {
-            urls: "turn:a.relay.metered.ca:80",
-            username: "e8b3d44a0f4d9c8e5a6f7b8c",
-            credential: "XrT9kLmNpQs2WvYz",
-          },
-          {
-            urls: "turn:a.relay.metered.ca:443",
-            username: "e8b3d44a0f4d9c8e5a6f7b8c",
-            credential: "XrT9kLmNpQs2WvYz",
-          },
-          {
-            urls: "turn:a.relay.metered.ca:443?transport=tcp",
-            username: "e8b3d44a0f4d9c8e5a6f7b8c",
-            credential: "XrT9kLmNpQs2WvYz",
-          },
-          // STUN (free)
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-
-    // TURN (Metered - WORKING)
-    {
-      urls: "turn:global.relay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    {
-      urls: "turn:global.relay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    {
-      urls: "turn:global.relay.metered.ca:443?transport=tcp",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-        ],
-        iceCandidatePoolSize: 10,
-        bundlePolicy: "max-bundle",
-        rtcpMuxPolicy: "require",
-        iceTransportPolicy: "all", // Try all methods: host, srflx, relay
-      };
-
-      const show = (id) => {
-        ["loginScreen", "dashboard", "chatScreen"].forEach((i) =>
-          document.getElementById(i).classList.add("hide")
-        );
-        document.getElementById(id).classList.remove("hide");
-      };
-
-      const log = (msg) => {
-        const t = new Date().toLocaleTimeString();
-        logs.push(`[${t}] ${msg}`);
-        if (logs.length > 12) logs.shift();
-
-        const d = document.getElementById("diagnostic");
-        d.innerHTML = logs
-          .map((l) => `<div class="log">${esc(l)}</div>`)
-          .join("");
-        d.scrollTop = d.scrollHeight;
-        d.classList.remove("hide");
-        console.log(msg);
-      };
-
-      const status = (state, text) => {
-        document.getElementById("statusDot").className = `status-dot ${state}`;
-        document.getElementById("statusText").textContent = text;
-      };
-
-      const togglePwd = () => {
-        const r = document.getElementById("role").value;
-        document
-          .getElementById("password")
-          .classList.toggle("hide", r !== "admin");
-      };
-
-      window.onload = () => {
-        const u = localStorage.getItem("chat_user");
-        const r = localStorage.getItem("chat_role");
-        const p = localStorage.getItem("chat_pwd");
-
-        if (u && r) {
-          document.getElementById("username").value = u;
-          document.getElementById("role").value = r;
-          togglePwd();
-
-          if (r === "admin" && p) {
-            document.getElementById("password").value = p;
-            setTimeout(login, 500);
-          } else if (r === "user") {
-            setTimeout(login, 500);
-          }
-        }
-      };
-
-      async function login() {
-        const u = document.getElementById("username").value.trim();
-        const r = document.getElementById("role").value;
-
-        if (!u) return showAlert("Enter username", "danger");
-
-        if (r === "admin") {
-          const p = document.getElementById("password").value;
-          if (p !== ADMIN_PWD) return showAlert("Wrong password!", "danger");
-          admin = true;
-          localStorage.setItem("chat_pwd", p);
-        }
-
-        user = u.toLowerCase();
-        localStorage.setItem("chat_user", user);
-        localStorage.setItem("chat_role", r);
-
-        connect();
+      function joinLobby() {
+        name = nameInput.value.trim() || 'Anonymous';
+        role = roleSelect.value;
+        if (!name) return alert('Enter name');
+        localStorage.setItem('chatName', name);
+        if (role === 'admin' && adminPass.value !== ADMIN_PASS) return alert('Wrong password!');
+        entry.style.display = 'none';
+        lobby.style.display = 'flex';
+        document.getElementById('currentUser').textContent = `${role === 'admin' ? '👑 Admin' : '👤 User'}: ${name}`;
+        connectWS();
       }
 
-      const showAlert = (msg, type) => {
-        const a = document.getElementById("loginAlert");
-        a.className = `alert alert-${type}`;
-        a.textContent = msg;
-        a.classList.remove("hide");
-        setTimeout(() => a.classList.add("hide"), 3000);
-      };
-
-      const checkPerms = async () => {
-        status("connecting", "Checking permissions...");
-
-        try {
-          log("Requesting media...");
-          const s = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: { echoCancellation: true, noiseSuppression: true },
-          });
-
-          s.getTracks().forEach((t) => t.stop());
-          status("connecting", "Ready! Waiting for admin...");
-          log("✅ Permissions granted");
-          return true;
-        } catch (e) {
-          log(`❌ Permission error: ${e.name}`);
-          status("offline", `Permission denied`);
-          alert(
-            `❌ Camera/Mic Required\n\nPlease allow permissions.\n\nError: ${e.name}`
-          );
-          return false;
-        }
-      };
-
-      const connect = () => {
-        log("Connecting to server...");
-
+      function connectWS() {
         ws = new WebSocket(WS_URL);
-
         ws.onopen = () => {
-          log("✅ WebSocket connected");
-          ws.send(JSON.stringify({ type: "register", username: user }));
-          startHeartbeat();
+          ws.send(JSON.stringify({type: 'register', id: myId, name, role}));
+          document.getElementById('status').textContent = 'Online';
         };
+        ws.onclose = () => document.getElementById('status').textContent = 'Disconnected';
+        ws.onerror = () => document.getElementById('status').textContent = 'Connection failed';
+        ws.onmessage = handleMessage;
+      }
 
-        ws.onmessage = handle;
-
-        ws.onerror = (err) => {
-          log("❌ WebSocket error");
-          console.error("WS Error:", err);
-          alert("❌ Cannot connect to server. Check your internet connection.");
-        };
-
-        ws.onclose = (e) => {
-          log(`WebSocket closed (code: ${e.code})`);
-          stopHeartbeat();
-
-          // Auto-reconnect if unexpected close
-          if (e.code !== 1000 && user) {
-            log("Attempting to reconnect in 3 seconds...");
-            setTimeout(() => {
-              if (!ws || ws.readyState === WebSocket.CLOSED) {
-                connect();
-              }
-            }, 3000);
-          }
-        };
-      };
-
-      const startHeartbeat = () => {
-        pingInterval = setInterval(() => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "ping" }));
-          }
-        }, 10000);
-      };
-
-      const stopHeartbeat = () => {
-        if (pingInterval) clearInterval(pingInterval);
-        if (statsInterval) clearInterval(statsInterval);
-      };
-
-      const handle = (e) => {
-        const d = JSON.parse(e.data);
-
-        switch (d.type) {
-          case "registered":
-            handleReg();
-            break;
-          case "online-users":
-            updateUsers(d.users);
-            break;
-          case "offer":
-            handleOffer(d.offer, d.from);
-            break;
-          case "answer":
-            handleAnswer(d.answer);
-            break;
-          case "ice-candidate":
-            handleIce(d.candidate);
-            break;
-          case "status":
-            d.online ? makeOffer(d.friend) : alert(`${d.friend} is offline`);
-            break;
-          case "typing":
-            showTyping();
-            break;
-          case "stop-typing":
-            hideTyping();
-            break;
-          case "pong":
-            lastPing = Date.now();
-            break;
-        }
-      };
-
-      const handleReg = async () => {
-        log("✅ Registered");
-        document.getElementById("badge").classList.remove("hide");
-        document.getElementById("logoutBtn").classList.remove("hide");
-
-        if (admin) {
-          document.getElementById("badge").textContent = "👑 ADMIN";
-          show("dashboard");
-          reqUsers();
-          setInterval(reqUsers, 5000);
-        } else {
-          document.getElementById("badge").textContent = "👤 USER";
-          show("chatScreen");
-          status("connecting", "Waiting for admin...");
-          log("Waiting for admin...");
-          await checkPerms();
-        }
-      };
-
-      const reqUsers = () => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "get-online-users" }));
-        }
-      };
-
-      const updateUsers = (users) => {
-        const list = document.getElementById("userList");
-        const time = document.getElementById("refreshTime");
-
-        time.textContent = `Updated ${new Date().toLocaleTimeString()}`;
-
-        if (!users.length) {
-          list.innerHTML =
-            '<div class="empty"><div class="empty-icon">😴</div><div class="empty-text">No users online</div></div>';
-          return;
-        }
-
-        list.innerHTML = users
-          .map((u) => {
-            const initial = u.charAt(0).toUpperCase();
-            return `
-          <div class="user-card" onclick="connectTo('${u}')">
-            <div class="user-left">
-              <div class="user-avatar">
-                ${initial}
-                <div class="online-dot"></div>
-              </div>
-              <div>
-                <div class="user-name">${u}</div>
-                <div class="user-status">Online</div>
-              </div>
-            </div>
-            <div style="color:#667eea;font-size:18px">→</div>
-          </div>
-        `;
-          })
-          .join("");
-      };
-
-      const connectTo = (u) => {
-        peer = u;
-        show("chatScreen");
-        logs = [];
-        log(`Connecting to ${u}...`);
-        ws.send(JSON.stringify({ type: "check-online", friend: u }));
-      };
-
-      async function makeOffer(p) {
+      function handleMessage(e) {
         try {
-          log("Creating peer connection...");
-          // pc = new RTCPeerConnection(rtc);
-          pc = new RTCPeerConnection({
-            ...rtc,
-            iceTransportPolicy: "all", // allow relay fallback
-          });
-          iceQ = [];
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'userlist') {
+            updateUserList(msg.users.filter(u => u.id !== myId));
+          } else if (msg.type === 'connect-response') {
+            currentRoom = msg.room;
+            if (role === 'admin') initPeer(true); else initPeer(false);
+          } else if (msg.type === 'webrtc') {
+            handleWebRTC(msg);
+          }
+        } catch(err) { console.error('Msg error:', err); }
+      }
 
-          dc = pc.createDataChannel("chat");
-          setupDC();
+      function updateUserList(users) {
+        const container = document.getElementById('users');
+        container.innerHTML = users.map(u => {
+          const clickable = role === 'admin' && u.role === 'user' ? `onclick="requestConnect('${u.id}')"` : 'style="opacity:0.5;cursor:default" title="Users cannot connect"';
+          return `<div class="user ${u.role}" ${clickable}>
+            <div class="online-dot"></div>
+            <strong>${u.name}</strong>
+            <span class="status">${u.role === 'admin' ? '👑 Teacher' : '👤 Student'}</span>
+          </div>`;
+        }).join('');
+        document.getElementById('status').textContent = `${users.length} online`;
+      }
 
-          let iceComplete = false;
-          let iceCandidates = [];
+      function requestConnect(toId) {
+        ws.send(JSON.stringify({type: 'connect-request', fromId: myId, toId}));
+      }
 
-          pc.onicecandidate = (e) => {
-            if (e.candidate) {
-              log(
-                `ICE candidate: ${e.candidate.type} (${e.candidate.protocol})`
-              );
-              iceCandidates.push(e.candidate);
-              // Send immediately
-              ws.send(
-                JSON.stringify({
-                  type: "ice-candidate",
-                  candidate: e.candidate,
-                  to: p,
-                })
-              );
-            } else {
-              log("✅ All ICE candidates gathered");
-              iceComplete = true;
-            }
-          };
+      const rtcConfig = {
+        iceServers: [
+          {urls: 'stun:stun.l.google.com:19302'},
+          {urls: 'stun:stun1.l.google.com:19302'},
+          { // Fixed TURN syntax [web:28]
+            urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+            credentialType: 'password'
+          }
+        ]
+      };
 
-          pc.onicegatheringstatechange = () => {
-            log(`ICE gathering: ${pc.iceGatheringState}`);
-          };
-
-          pc.oniceconnectionstatechange = () => {
-            log(`ICE state: ${pc.iceConnectionState}`);
-            if (
-              pc.iceConnectionState === "connected" ||
-              pc.iceConnectionState === "completed"
-            ) {
-              log("✅ ICE connected!");
-              status("online", `Connected with ${peer}`);
-            // } else if (pc.iceConnectionState === "failed") {
-            //   log("❌ ICE failed - attempting restart");
-            //   status("offline", "Connection failed - retrying...");
-            //   setTimeout(() => {
-            //     if (pc && pc.iceConnectionState === "failed") {
-            //       pc.restartIce();
-            //     }
-            //   }, 1000);
-            } else if (pc.iceConnectionState === "disconnected") {
-              log("⚠️ ICE disconnected");
-              status("connecting", "Reconnecting...");
-            } else if (pc.iceConnectionState === "checking") {
-              status("connecting", "Checking connection...");
-            }
-          };
-
-          pc.ontrack = (e) => {
-            log("✅ Remote stream received");
-            const vid = document.getElementById("video");
+      async function initPeer(isAdmin) {
+        peer = new RTCPeerConnection(rtcConfig);
+        
+        if (!isAdmin) {
+          // Student: share camera continuously
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'user'}, audio: false});
+            stream.getTracks().forEach(track => peer.addTrack(track, stream));
+          } catch(e) {
+            alert('Camera access required for students');
+            return;
+          }
+        }
+        
+        peer.ondatachannel = (e) => {
+          dataChannel = e.channel;
+          setupDataChannel();
+        };
+        
+        if (isAdmin) {
+          dataChannel = peer.createDataChannel('chat');
+          setupDataChannel();
+          peer.ontrack = (e) => {
+            const vid = document.getElementById('video-admin');
             vid.srcObject = e.streams[0];
-            vid.muted = false;
-            document.getElementById("videoWrap").classList.add("active");
-            document.getElementById("videoLabel").textContent = p.toUpperCase();
-            startNetworkMonitor();
+            vid.onloadedmetadata = () => vid.play();
+            vid.style.display = 'block';
           };
+        }
+        
+        peer.onicecandidate = (e) => {
+          if (e.candidate) {
+            ws.send(JSON.stringify({type: 'webrtc', fromId: myId, candidate: e.candidate, room: currentRoom}));
+          }
+        };
+        
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        ws.send(JSON.stringify({type: 'webrtc', fromId: myId, sdp: peer.localDescription, room: currentRoom}));
+        
+        lobby.style.display = 'none';
+        chat.style.display = 'flex';
+      }
 
-          pc.onconnectionstatechange = () => {
-            log(`Connection: ${pc.connectionState}`);
-            if (pc.connectionState === "connected") {
-              status("online", `Connected with ${peer}`);
-            } else if (pc.connectionState === "failed") {
-              status("offline", "Connection failed");
-              alert(
-                "❌ Connection Failed\n\nPossible reasons:\n• Firewall blocking\n• NAT/Router issues\n• ISP restrictions\n\nSolutions:\n• Try mobile hotspot\n• Disable VPN/Proxy\n• Check firewall"
-              );
+      function setupDataChannel() {
+        dataChannel.onopen = () => console.log('✅ Chat connected');
+        dataChannel.onmessage = (e) => addMessage(e.data, false);
+        dataChannel.onclose = () => console.log('Chat disconnected');
+      }
+
+      function handleWebRTC(msg) {
+        if (!peer) return;
+        if (msg.candidate) {
+          peer.addIceCandidate(new RTCIceCandidate(msg.candidate));
+        }
+        if (msg.sdp) {
+          peer.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(async () => {
+            if (msg.sdp.type === 'offer') {
+              const answer = await peer.createAnswer();
+              await peer.setLocalDescription(answer);
+              ws.send(JSON.stringify({type: 'webrtc', fromId: myId, sdp: peer.localDescription, room: currentRoom}));
             }
-          };
-
-          pc.addTransceiver("video", { direction: "recvonly" });
-          pc.addTransceiver("audio", { direction: "recvonly" });
-
-          log("Creating offer...");
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true,
-          });
-
-          await pc.setLocalDescription(offer);
-          log("Local description set");
-
-          // Wait for ICE gathering to complete or timeout
-          log("Gathering ICE candidates...");
-          await new Promise((resolve) => {
-            if (iceComplete || pc.iceGatheringState === "complete") {
-              resolve();
-            } else {
-              const timeout = setTimeout(() => resolve(), 3000);
-              const interval = setInterval(() => {
-                if (iceComplete || pc.iceGatheringState === "complete") {
-                  clearTimeout(timeout);
-                  clearInterval(interval);
-                  resolve();
-                }
-              }, 100);
-            }
-          });
-
-          log(`Sending offer with ${iceCandidates.length} candidates`);
-          ws.send(
-            JSON.stringify({
-              type: "offer",
-              offer: pc.localDescription,
-              to: p,
-              from: user,
-            })
-          );
-
-          setTimeout(() => {
-  if (
-    pc &&
-    pc.connectionState !== 'connected' &&
-    pc.iceConnectionState !== 'connected' &&
-    pc.iceConnectionState !== 'completed'
-  ) {
-    log('⏱️ Direct connection failed — switching to TURN');
-    status('connecting', 'Switching to relay network...');
-    forceTurnReconnect();
-  }
-}, 6000);
-
-
-          // Connection timeout
-          setTimeout(() => {
-            if (
-              pc &&
-              (pc.connectionState === "connecting" ||
-                pc.iceConnectionState === "checking")
-            ) {
-              log("⚠️ Connection timeout - still trying...");
-              status("connecting", "Taking longer than usual...");
-            }
-          }, 15000);
-        } catch (e) {
-          log(`❌ Error: ${e.message}`);
-          alert(`Connection error: ${e.message}`);
+          }).catch(console.error);
         }
       }
 
-      async function handleOffer(offer, from) {
-        try {
-          peer = from;
-          show("chatScreen");
-          log(`Received offer from ${from}`);
-          status("connecting", `Connecting with ${from}...`);
-
-          // pc = new RTCPeerConnection(rtc);
-          pc = new RTCPeerConnection({
-            ...rtc,
-            iceTransportPolicy: "all", // allow relay fallback
-          });
-          iceQ = [];
-
-          try {
-            log("Getting camera/mic...");
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: {
-                facingMode: "user",
-                width: { ideal: 1280, max: 1920 },
-                height: { ideal: 720, max: 1080 },
-                aspectRatio: { ideal: 16 / 9 },
-              },
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-              },
-            });
-
-            stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-            log("✅ Media ready");
-            startNetworkMonitor();
-          } catch (e) {
-            log(`❌ Media error: ${e.message}`);
-            alert(
-              `❌ Cannot access camera/mic\n\nMake sure:\n• Permissions allowed\n• No other app using camera\n• Using HTTPS\n\nError: ${e.name}`
-            );
-          }
-
-          pc.ondatachannel = (e) => {
-            dc = e.channel;
-            setupDC();
-          };
-
-          pc.onicecandidate = (e) => {
-            if (e.candidate) {
-              ws.send(
-                JSON.stringify({
-                  type: "ice-candidate",
-                  candidate: e.candidate,
-                  to: from,
-                })
-              );
-            }
-          };
-
-          pc.onconnectionstatechange = () => {
-            log(`Connection state: ${pc.connectionState}`);
-            if (pc.connectionState === "connected") {
-              status("online", `Connected with ${peer}`);
-            } else if (
-              pc.connectionState === "disconnected" ||
-              pc.connectionState === "failed"
-            ) {
-              status("offline", "Disconnected");
-            }
-          };
-
-          await pc.setRemoteDescription(offer);
-
-          iceQ.forEach((c) =>
-            pc
-              .addIceCandidate(new RTCIceCandidate(c))
-              .catch((e) => log(`ICE: ${e.message}`))
-          );
-          iceQ = [];
-
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-
-          ws.send(
-            JSON.stringify({ type: "answer", answer, to: from, from: user })
-          );
-          log("Answer sent");
-        } catch (e) {
-          log(`❌ Error: ${e.message}`);
-          alert(`Connection error: ${e.message}`);
-        }
-      }
-
-      async function handleAnswer(answer) {
-        try {
-          await pc.setRemoteDescription(answer);
-          log("✅ Answer processed");
-
-          iceQ.forEach((c) =>
-            pc
-              .addIceCandidate(new RTCIceCandidate(c))
-              .catch((e) => log(`ICE: ${e.message}`))
-          );
-          iceQ = [];
-        } catch (e) {
-          log(`❌ Error: ${e.message}`);
-        }
-      }
-
-      const handleIce = (candidate) => {
-        if (!pc) {
-          log("⚠️ ICE received but no peer connection");
-          return;
-        }
-
-        if (pc.remoteDescription && pc.remoteDescription.type) {
-          pc.addIceCandidate(new RTCIceCandidate(candidate))
-            .then(() => {
-              const type =
-                candidate.type ||
-                candidate.candidate?.split(" ")[7] ||
-                "unknown";
-              log(`✅ ICE added: ${type}`);
-            })
-            .catch((e) => log(`❌ ICE error: ${e.message}`));
-        } else {
-          iceQ.push(candidate);
-          log(`ICE queued (${iceQ.length} total, waiting for remote desc)`);
-        }
-      };
-
-      const setupDC = () => {
-        dc.onopen = () => {
-          log("✅ Data channel open");
-          status("online", `Connected with ${peer}`);
-        };
-
-        dc.onmessage = (e) => {
-          const data = JSON.parse(e.data);
-          if (data.type === "message") {
-            showMsg(data.text, "received", peer);
-          } else if (data.type === "typing") {
-            showTyping();
-          } else if (data.type === "stop-typing") {
-            hideTyping();
-          }
-        };
-
-        dc.onclose = () => {
-          log("Data channel closed");
-          status("offline", "Disconnected");
-        };
-      };
-
-      const startNetworkMonitor = () => {
-        if (statsInterval) clearInterval(statsInterval);
-
-        statsInterval = setInterval(async () => {
-          if (!pc) return;
-
-          try {
-            const stats = await pc.getStats();
-            let bytesReceived = 0;
-            let bytesSent = 0;
-            let packetsLost = 0;
-            let jitter = 0;
-
-            stats.forEach((report) => {
-              if (report.type === "inbound-rtp" && report.kind === "video") {
-                bytesReceived = report.bytesReceived || 0;
-                packetsLost = report.packetsLost || 0;
-                jitter = report.jitter || 0;
-              }
-              if (report.type === "outbound-rtp" && report.kind === "video") {
-                bytesSent = report.bytesSent || 0;
-              }
-            });
-
-            // Calculate quality
-            let quality = "excellent";
-            let bars = 4;
-
-            if (packetsLost > 50 || jitter > 0.1) {
-              quality = "poor";
-              bars = 1;
-            } else if (packetsLost > 20 || jitter > 0.05) {
-              quality = "medium";
-              bars = 2;
-            } else if (packetsLost > 10 || jitter > 0.03) {
-              quality = "good";
-              bars = 3;
-            }
-
-            updateNetworkUI(quality, bars);
-          } catch (e) {
-            console.error("Stats error:", e);
-          }
-        }, 2000);
-      };
-
-      const updateNetworkUI = (quality, bars) => {
-        const info = document.getElementById("networkInfo");
-        const barsEl = document.getElementById("networkBars");
-        const text = document.getElementById("networkText");
-
-        info.classList.remove("hide");
-
-        const barHTML = Array.from({ length: 4 }, (_, i) => {
-          let cls = "bar";
-          if (i < bars) {
-            cls +=
-              quality === "poor"
-                ? " poor"
-                : quality === "medium"
-                ? " medium"
-                : " active";
-          }
-          return `<div class="${cls}"></div>`;
-        }).join("");
-
-        barsEl.innerHTML = barHTML;
-
-        const labels = {
-          excellent: "🟢 Excellent",
-          good: "🟡 Good",
-          medium: "🟠 Medium",
-          poor: "🔴 Poor",
-        };
-
-        text.textContent = labels[quality] || "Checking...";
-      };
-
-      let typingTimeout;
-      const handleTyping = () => {
-        if (!dc || dc.readyState !== "open") return;
-
-        dc.send(JSON.stringify({ type: "typing" }));
-
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
-          dc.send(JSON.stringify({ type: "stop-typing" }));
-        }, 1000);
-      };
-
-      const showTyping = () => {
-        document.getElementById("typing").classList.add("active");
-        const msgs = document.getElementById("messages");
-        msgs.scrollTop = msgs.scrollHeight;
-      };
-
-      const hideTyping = () => {
-        document.getElementById("typing").classList.remove("active");
-      };
-
-      const send = () => {
-        const input = document.getElementById("msgInput");
+      function sendMessage() {
+        const input = document.getElementById('messageInput');
         const text = input.value.trim();
+        if (!text || !dataChannel || dataChannel.readyState !== 'open') return;
+        dataChannel.send(text);
+        addMessage(text, true);
+        input.value = '';
+      }
 
-        if (!text || !dc || dc.readyState !== "open") return;
-
-        dc.send(JSON.stringify({ type: "message", text }));
-        showMsg(text, "sent", "You");
-        input.value = "";
-        input.focus();
-
-        // Stop typing indicator
-        dc.send(JSON.stringify({ type: "stop-typing" }));
-      };
-
-      const showMsg = (text, type, sender) => {
-        const msgs = document.getElementById("messages");
-        const msg = document.createElement("div");
-        msg.className = `msg msg-${type}`;
-
-        const time = new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-
-        msg.innerHTML = `
-        <div class="bubble">
-          <div class="msg-sender">${sender}</div>
-          <div class="msg-text">${esc(text)}</div>
-          <div class="msg-time">${time}</div>
-        </div>
-      `;
-
-        // Insert before typing indicator
-        const typing = document.getElementById("typing");
-        msgs.insertBefore(msg, typing);
-        msgs.scrollTop = msgs.scrollHeight;
-      };
-
-      const esc = (text) => {
-        const div = document.createElement("div");
+      function addMessage(text, sent) {
+        const div = document.createElement('div');
+        div.className = `message ${sent ? 'sent' : 'received'}`;
         div.textContent = text;
-        return div.innerHTML;
-      };
+        document.getElementById('messages').appendChild(div);
+        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+      }
 
-      const disconnect = () => {
-        if (pc) pc.close();
-        if (stream) {
-          stream.getTracks().forEach((t) => t.stop());
-          stream = null;
-        }
-
-        stopHeartbeat();
-        document.getElementById("videoWrap").classList.remove("active");
-        document.getElementById("messages").innerHTML =
-          '<div id="typing" class="typing"><div class="typing-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>';
-        document.getElementById("diagnostic").classList.add("hide");
-        document.getElementById("networkInfo").classList.add("hide");
-        logs = [];
-
-        if (admin) {
-          show("dashboard");
-          reqUsers();
-        } else {
-          status("connecting", "Waiting for admin...");
-        }
-      };
-
-      const logout = () => {
-        if (!confirm("Logout?")) return;
-
-        if (ws) ws.close();
-        if (pc) pc.close();
-        if (stream) stream.getTracks().forEach((t) => t.stop());
-
-        localStorage.removeItem("chat_user");
-        localStorage.removeItem("chat_role");
-        localStorage.removeItem("chat_pwd");
-
-        location.reload();
-      };
-      function forceTurnReconnect() {
-  log('🔁 Forcing TURN-only reconnect');
-
-  if (pc) pc.close();
-
-  pc = new RTCPeerConnection({
-    ...rtc,
-    iceTransportPolicy: 'relay' // TURN ONLY
-  });
-
-  iceQ = [];
-
-  if (admin && peer) {
-    makeOffer(peer);
-  }
-}
-
-
-      window.onbeforeunload = () => {
-        if (ws) ws.close();
-        if (pc) pc.close();
-        if (stream) stream.getTracks().forEach((t) => t.stop());
-        stopHeartbeat();
-      };
-    </script>
-  </body>
+      // Enter to send
+      document.getElementById('messageInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+      });
+    })();
+  </script>
+</body>
 </html>
