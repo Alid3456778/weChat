@@ -6,8 +6,13 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files
-app.use(express.static(__dirname));
+// Serve static files from the current directory
+app.use(express.static(path.join(__dirname)));
+
+// Serve index.html for root route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -25,15 +30,6 @@ const chatHistory = new Map();
 // Generate unique ID
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
-}
-
-// Broadcast to all clients
-function broadcast(message, excludeId = null) {
-    clients.forEach((client, id) => {
-        if (id !== excludeId && client.ws.readyState === WebSocket.OPEN) {
-            client.ws.send(JSON.stringify(message));
-        }
-    });
 }
 
 // Send to specific client
@@ -95,6 +91,8 @@ wss.on('connection', (ws) => {
     });
 
     function handleMessage(ws, data) {
+        console.log('Received message type:', data.type);
+        
         switch (data.type) {
             case 'join':
                 handleJoin(ws, data);
@@ -307,15 +305,19 @@ wss.on('connection', (ws) => {
 
     function handleWebRTC(data) {
         const toId = data.to;
+        console.log(`Forwarding ${data.type} to ${toId}`);
+        
         if (toId) {
-            sendToClient(toId, {
+            const forwardData = {
                 type: data.type,
-                [data.type]: data[data.type],
-                offer: data.offer,
-                answer: data.answer,
-                candidate: data.candidate,
                 from: clientId
-            });
+            };
+
+            if (data.offer) forwardData.offer = data.offer;
+            if (data.answer) forwardData.answer = data.answer;
+            if (data.candidate) forwardData.candidate = data.candidate;
+
+            sendToClient(toId, forwardData);
         }
     }
 
@@ -324,6 +326,8 @@ wss.on('connection', (ws) => {
             return;
         }
 
+        console.log('Admin requesting video from user:', data.userId);
+        
         sendToClient(data.userId, {
             type: 'videoRequest'
         });
@@ -391,4 +395,5 @@ function handleDisconnect(clientId) {
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     console.log(`WebSocket server is ready`);
+    console.log(`Access the app at http://localhost:${PORT}`);
 });

@@ -214,35 +214,16 @@
             position: relative;
         }
 
+        .no-video-message {
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
         video {
             width: 100%;
             height: 100%;
             object-fit: cover;
-        }
-
-        .video-controls {
-            position: absolute;
-            bottom: 20px;
-            display: flex;
-            gap: 10px;
-        }
-
-        .video-btn {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border: none;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-        }
-
-        .video-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
         }
 
         .chat-section {
@@ -328,7 +309,7 @@
         }
 
         .hidden {
-            display: none;
+            display: none !important;
         }
 
         .status-badge {
@@ -397,15 +378,15 @@
 
         <!-- Chat Screen -->
         <div id="chatScreen" class="chat-screen hidden">
-            <div class="video-section">
+            <!-- Video Section (Only visible for Admin) -->
+            <div class="video-section" id="videoSection">
                 <video id="remoteVideo" autoplay playsinline></video>
-                <video id="localVideo" autoplay playsinline muted style="display: none;"></video>
-                <div class="video-controls" id="videoControls" style="display: none;">
-                    <button class="video-btn" onclick="toggleVideo()">
-                        <span id="videoIcon">📹</span>
-                    </button>
+                <div class="no-video-message" id="noVideoMessage">
+                    <h3>📹 Video Feed</h3>
+                    <p>Waiting for user's video...</p>
                 </div>
             </div>
+            
             <div class="chat-section">
                 <div class="chat-header">
                     <div>
@@ -423,523 +404,529 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
     <script>
-      // Configuration
-const ADMIN_PASSWORD = "admin123"; // Change this password as needed
-const WS_URL = "wss://wechat-xhvo.onrender.com"; // Change to your Render.com WebSocket URL
+        // Configuration
+        const ADMIN_PASSWORD = "admin123"; // Change this password as needed
+        const WS_URL = "wss://wechat-xhvo.onrender.com"; // Your Render WebSocket URL
 
-// Global variables
-let ws = null;
-let currentUser = {
-    id: null,
-    username: "",
-    type: "user"
-};
-let selectedUser = null;
-let messages = [];
-let localStream = null;
-let remoteStream = null;
-let peerConnection = null;
-let videoEnabled = false;
+        // Global variables
+        let ws = null;
+        let currentUser = {
+            id: null,
+            username: "",
+            type: "user"
+        };
+        let selectedUser = null;
+        let messages = [];
+        let localStream = null;
+        let remoteStream = null;
+        let peerConnection = null;
 
-// WebRTC Configuration
-const iceServers = {
-    iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
-    ]
-};
+        // WebRTC Configuration
+        const iceServers = {
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                { urls: "stun:stun1.l.google.com:19302" }
+            ]
+        };
 
-// DOM Elements
-const loginScreen = document.getElementById("loginScreen");
-const lobbyScreen = document.getElementById("lobbyScreen");
-const chatScreen = document.getElementById("chatScreen");
-const usernameInput = document.getElementById("usernameInput");
-const passwordInput = document.getElementById("passwordInput");
-const passwordGroup = document.getElementById("passwordGroup");
-const userList = document.getElementById("userList");
-const messagesDiv = document.getElementById("messages");
-const messageInput = document.getElementById("messageInput");
-const localVideo = document.getElementById("localVideo");
-const remoteVideo = document.getElementById("remoteVideo");
-const videoControls = document.getElementById("videoControls");
+        // DOM Elements
+        const loginScreen = document.getElementById("loginScreen");
+        const lobbyScreen = document.getElementById("lobbyScreen");
+        const chatScreen = document.getElementById("chatScreen");
+        const usernameInput = document.getElementById("usernameInput");
+        const passwordInput = document.getElementById("passwordInput");
+        const passwordGroup = document.getElementById("passwordGroup");
+        const userList = document.getElementById("userList");
+        const messagesDiv = document.getElementById("messages");
+        const messageInput = document.getElementById("messageInput");
+        const remoteVideo = document.getElementById("remoteVideo");
+        const videoSection = document.getElementById("videoSection");
+        const noVideoMessage = document.getElementById("noVideoMessage");
 
-// Radio button listener
-document.querySelectorAll('input[name="userType"]').forEach(radio => {
-    radio.addEventListener("change", (e) => {
-        if (e.target.value === "admin") {
-            passwordGroup.classList.remove("hidden");
-        } else {
-            passwordGroup.classList.add("hidden");
-        }
-    });
-});
+        // Radio button listener
+        document.querySelectorAll('input[name="userType"]').forEach(radio => {
+            radio.addEventListener("change", (e) => {
+                if (e.target.value === "admin") {
+                    passwordGroup.classList.remove("hidden");
+                } else {
+                    passwordGroup.classList.add("hidden");
+                }
+            });
+        });
 
-// Login Handler
-function handleLogin() {
-    const username = usernameInput.value.trim();
-    const userType = document.querySelector('input[name="userType"]:checked').value;
-    const password = passwordInput.value;
+        // Login Handler
+        function handleLogin() {
+            const username = usernameInput.value.trim();
+            const userType = document.querySelector('input[name="userType"]:checked').value;
+            const password = passwordInput.value;
 
-    if (!username) {
-        alert("Please enter your name");
-        return;
-    }
-
-    if (userType === "admin" && password !== ADMIN_PASSWORD) {
-        alert("Incorrect admin password");
-        return;
-    }
-
-    currentUser.username = username;
-    currentUser.type = userType;
-
-    connectWebSocket();
-}
-
-// WebSocket Connection
-function connectWebSocket() {
-    ws = new WebSocket(WS_URL);
-
-    ws.onopen = () => {
-        console.log("Connected to server");
-        ws.send(JSON.stringify({
-            type: "join",
-            username: currentUser.username,
-            userType: currentUser.type
-        }));
-        showLobby();
-    };
-
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        handleWebSocketMessage(data);
-    };
-
-    ws.onclose = () => {
-        console.log("Disconnected from server");
-    };
-
-    ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        alert("Connection error. Please check if the server is running.");
-    };
-}
-
-// WebSocket Message Handler
-function handleWebSocketMessage(data) {
-    switch (data.type) {
-        case "welcome":
-            currentUser.id = data.userId;
-            break;
-
-        case "userList":
-            updateUserList(data.users);
-            break;
-
-        case "queuePosition":
-            updateQueuePosition(data.position);
-            break;
-
-        case "chatStarted":
-            startChat(data.with, data.messages);
-            break;
-
-        case "message":
-            receiveMessage(data);
-            break;
-
-        case "chatEnded":
-            handleChatEnded(data);
-            break;
-
-        case "offer":
-            handleOffer(data.offer, data.from);
-            break;
-
-        case "answer":
-            handleAnswer(data.answer);
-            break;
-
-        case "iceCandidate":
-            handleIceCandidate(data.candidate);
-            break;
-
-        case "videoRequest":
-            if (currentUser.type === "user") {
-                startVideo();
+            if (!username) {
+                alert("Please enter your name");
+                return;
             }
-            break;
 
-        case "error":
-            alert(data.message);
-            break;
-    }
-}
+            if (userType === "admin" && password !== ADMIN_PASSWORD) {
+                alert("Incorrect admin password");
+                return;
+            }
 
-// Show Lobby
-function showLobby() {
-    loginScreen.classList.add("hidden");
-    lobbyScreen.classList.remove("hidden");
-    chatScreen.classList.add("hidden");
+            currentUser.username = username;
+            currentUser.type = userType;
 
-    document.getElementById("lobbyTitle").textContent = 
-        currentUser.type === "admin" ? "Admin Lobby" : "User Lobby";
-    document.getElementById("lobbyUsername").textContent = 
-        `Logged in as: ${currentUser.username}`;
+            connectWebSocket();
+        }
 
-    if (currentUser.type === "user") {
-        document.getElementById("waitingText").textContent = 
-            "Waiting for admin to connect...";
-    } else {
-        document.getElementById("waitingText").textContent = 
-            "Select a user to start chatting";
-    }
-}
+        // WebSocket Connection
+        function connectWebSocket() {
+            ws = new WebSocket(WS_URL);
 
-// Update User List (Admin only)
-function updateUserList(users) {
-    if (currentUser.type !== "admin") return;
+            ws.onopen = () => {
+                console.log("Connected to server");
+                ws.send(JSON.stringify({
+                    type: "join",
+                    username: currentUser.username,
+                    userType: currentUser.type
+                }));
+                showLobby();
+            };
 
-    userList.innerHTML = "";
-    users.forEach(user => {
-        if (user.type === "user") {
-            const userItem = document.createElement("div");
-            userItem.className = "user-item online";
-            userItem.innerHTML = `
-                <strong>${user.username}</strong>
-                <div style="font-size: 0.8em; color: #666;">Click to chat</div>
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+
+            ws.onclose = () => {
+                console.log("Disconnected from server");
+            };
+
+            ws.onerror = (error) => {
+                console.error("WebSocket error:", error);
+                alert("Connection error. Please check if the server is running.");
+            };
+        }
+
+        // WebSocket Message Handler
+        function handleWebSocketMessage(data) {
+            console.log("Received:", data.type);
+            
+            switch (data.type) {
+                case "welcome":
+                    currentUser.id = data.userId;
+                    break;
+
+                case "userList":
+                    updateUserList(data.users);
+                    break;
+
+                case "queuePosition":
+                    updateQueuePosition(data.position);
+                    break;
+
+                case "chatStarted":
+                    startChat(data.with, data.messages);
+                    break;
+
+                case "message":
+                    receiveMessage(data);
+                    break;
+
+                case "chatEnded":
+                    handleChatEnded(data);
+                    break;
+
+                case "offer":
+                    handleOffer(data.offer, data.from);
+                    break;
+
+                case "answer":
+                    handleAnswer(data.answer);
+                    break;
+
+                case "iceCandidate":
+                    handleIceCandidate(data.candidate);
+                    break;
+
+                case "videoRequest":
+                    if (currentUser.type === "user") {
+                        startVideo();
+                    }
+                    break;
+
+                case "error":
+                    alert(data.message);
+                    break;
+            }
+        }
+
+        // Show Lobby
+        function showLobby() {
+            loginScreen.classList.add("hidden");
+            lobbyScreen.classList.remove("hidden");
+            chatScreen.classList.add("hidden");
+
+            document.getElementById("lobbyTitle").textContent = 
+                currentUser.type === "admin" ? "Admin Lobby" : "User Lobby";
+            document.getElementById("lobbyUsername").textContent = 
+                `Logged in as: ${currentUser.username}`;
+
+            if (currentUser.type === "user") {
+                document.getElementById("waitingText").textContent = 
+                    "Waiting for admin to connect...";
+            } else {
+                document.getElementById("waitingText").textContent = 
+                    "Select a user to start chatting";
+            }
+        }
+
+        // Update User List (Admin only)
+        function updateUserList(users) {
+            if (currentUser.type !== "admin") return;
+
+            userList.innerHTML = "";
+            users.forEach(user => {
+                if (user.type === "user") {
+                    const userItem = document.createElement("div");
+                    userItem.className = "user-item online";
+                    userItem.innerHTML = `
+                        <strong>${user.username}</strong>
+                        <div style="font-size: 0.8em; color: #666;">Click to chat</div>
+                    `;
+                    userItem.onclick = () => selectUser(user);
+                    userList.appendChild(userItem);
+                }
+            });
+
+            if (userList.children.length === 0) {
+                userList.innerHTML = "<p style='padding: 20px; text-align: center; color: #999;'>No users online</p>";
+            }
+        }
+
+        // Update Queue Position (User only)
+        function updateQueuePosition(position) {
+            if (currentUser.type !== "user") return;
+
+            const queueInfo = document.getElementById("queueInfo");
+            const queuePosition = document.getElementById("queuePosition");
+
+            if (position > 0) {
+                queueInfo.classList.remove("hidden");
+                queuePosition.textContent = position;
+            } else {
+                queueInfo.classList.add("hidden");
+            }
+        }
+
+        // Select User (Admin only)
+        function selectUser(user) {
+            if (currentUser.type !== "admin") return;
+
+            ws.send(JSON.stringify({
+                type: "selectUser",
+                userId: user.id
+            }));
+        }
+
+        // Start Chat
+        function startChat(user, chatMessages) {
+            selectedUser = user;
+            messages = chatMessages || [];
+
+            lobbyScreen.classList.add("hidden");
+            chatScreen.classList.remove("hidden");
+
+            document.getElementById("chatWith").textContent = 
+                `Chatting with ${user.username}`;
+
+            displayMessages();
+
+            // Handle video section visibility
+            if (currentUser.type === "admin") {
+                videoSection.classList.remove("hidden");
+                noVideoMessage.classList.remove("hidden");
+                
+                // Request user's video
+                setTimeout(() => {
+                    ws.send(JSON.stringify({
+                        type: "requestVideo",
+                        userId: user.id
+                    }));
+                }, 500);
+            } else {
+                // User doesn't see video section at all
+                videoSection.classList.add("hidden");
+            }
+        }
+
+        // Display Messages
+        function displayMessages() {
+            messagesDiv.innerHTML = "";
+            messages.forEach(msg => {
+                addMessageToUI(msg);
+            });
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Add Message to UI
+        function addMessageToUI(msg) {
+            const messageDiv = document.createElement("div");
+            messageDiv.className = `message ${msg.from === currentUser.username ? 'self' : 'other'}`;
+
+            const time = new Date(msg.timestamp).toLocaleTimeString([], { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+
+            messageDiv.innerHTML = `
+                <div class="message-sender">${msg.from}</div>
+                <div class="message-bubble">${escapeHtml(msg.text)}</div>
+                <div class="message-time">${time}</div>
             `;
-            userItem.onclick = () => selectUser(user);
-            userList.appendChild(userItem);
-        }
-    });
 
-    if (userList.children.length === 0) {
-        userList.innerHTML = "<p style='padding: 20px; text-align: center; color: #999;'>No users online</p>";
-    }
-}
-
-// Update Queue Position (User only)
-function updateQueuePosition(position) {
-    if (currentUser.type !== "user") return;
-
-    const queueInfo = document.getElementById("queueInfo");
-    const queuePosition = document.getElementById("queuePosition");
-
-    if (position > 0) {
-        queueInfo.classList.remove("hidden");
-        queuePosition.textContent = position;
-    } else {
-        queueInfo.classList.add("hidden");
-    }
-}
-
-// Select User (Admin only)
-function selectUser(user) {
-    if (currentUser.type !== "admin") return;
-
-    ws.send(JSON.stringify({
-        type: "selectUser",
-        userId: user.id
-    }));
-}
-
-// Start Chat
-function startChat(user, chatMessages) {
-    selectedUser = user;
-    messages = chatMessages || [];
-
-    lobbyScreen.classList.add("hidden");
-    chatScreen.classList.remove("hidden");
-
-    document.getElementById("chatWith").textContent = 
-        `Chatting with ${user.username}`;
-
-    displayMessages();
-
-    if (currentUser.type === "admin") {
-        // Admin requests user's video
-        ws.send(JSON.stringify({
-            type: "requestVideo",
-            userId: user.id
-        }));
-        videoControls.style.display = "none";
-    } else {
-        videoControls.style.display = "flex";
-    }
-}
-
-// Display Messages
-function displayMessages() {
-    messagesDiv.innerHTML = "";
-    messages.forEach(msg => {
-        addMessageToUI(msg);
-    });
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
-
-// Add Message to UI
-function addMessageToUI(msg) {
-    const messageDiv = document.createElement("div");
-    messageDiv.className = `message ${msg.from === currentUser.username ? 'self' : 'other'}`;
-
-    const time = new Date(msg.timestamp).toLocaleTimeString([], { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-    });
-
-    messageDiv.innerHTML = `
-        <div class="message-sender">${msg.from}</div>
-        <div class="message-bubble">${escapeHtml(msg.text)}</div>
-        <div class="message-time">${time}</div>
-    `;
-
-    messagesDiv.appendChild(messageDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
-
-// Send Message
-function sendMessage() {
-    const text = messageInput.value.trim();
-    if (!text || !ws) return;
-
-    const message = {
-        type: "message",
-        text: text,
-        to: selectedUser.id
-    };
-
-    ws.send(JSON.stringify(message));
-
-    const msg = {
-        from: currentUser.username,
-        text: text,
-        timestamp: new Date().toISOString()
-    };
-
-    messages.push(msg);
-    addMessageToUI(msg);
-    messageInput.value = "";
-}
-
-// Receive Message
-function receiveMessage(data) {
-    const msg = {
-        from: data.from,
-        text: data.text,
-        timestamp: data.timestamp
-    };
-
-    messages.push(msg);
-    addMessageToUI(msg);
-}
-
-// Handle Key Press
-function handleKeyPress(event) {
-    if (event.key === "Enter") {
-        sendMessage();
-    }
-}
-
-// End Chat
-function endChat() {
-    ws.send(JSON.stringify({
-        type: "endChat",
-        userId: selectedUser?.id
-    }));
-
-    cleanupChat();
-    showLobby();
-}
-
-// Handle Chat Ended
-function handleChatEnded(data) {
-    cleanupChat();
-    showLobby();
-
-    if (currentUser.type === "user" && data.queuePosition) {
-        updateQueuePosition(data.queuePosition);
-    }
-}
-
-// Cleanup Chat
-function cleanupChat() {
-    selectedUser = null;
-    messages = [];
-    stopVideo();
-}
-
-// Logout
-function logout() {
-    if (ws) {
-        ws.close();
-    }
-    cleanupChat();
-    currentUser = { id: null, username: "", type: "user" };
-    usernameInput.value = "";
-    passwordInput.value = "";
-    loginScreen.classList.remove("hidden");
-    lobbyScreen.classList.add("hidden");
-    chatScreen.classList.add("hidden");
-}
-
-// === WebRTC Video Functions ===
-
-// Start Video
-async function startVideo() {
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ 
-            video: true, 
-            audio: true 
-        });
-
-        if (currentUser.type === "user") {
-            localVideo.srcObject = localStream;
-            localVideo.style.display = "block";
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        videoEnabled = true;
+        // Send Message
+        function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text || !ws) return;
 
-        createPeerConnection();
-
-        if (currentUser.type === "user") {
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-
-            ws.send(JSON.stringify({
-                type: "offer",
-                offer: offer,
+            const message = {
+                type: "message",
+                text: text,
                 to: selectedUser.id
-            }));
+            };
+
+            ws.send(JSON.stringify(message));
+
+            const msg = {
+                from: currentUser.username,
+                text: text,
+                timestamp: new Date().toISOString()
+            };
+
+            messages.push(msg);
+            addMessageToUI(msg);
+            messageInput.value = "";
         }
-    } catch (error) {
-        console.error("Error starting video:", error);
-        alert("Could not access camera/microphone. Please check permissions.");
-    }
-}
 
-// Stop Video
-function stopVideo() {
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-    }
+        // Receive Message
+        function receiveMessage(data) {
+            const msg = {
+                from: data.from,
+                text: data.text,
+                timestamp: data.timestamp
+            };
 
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
+            messages.push(msg);
+            addMessageToUI(msg);
+        }
 
-    if (remoteStream) {
-        remoteStream = null;
-    }
+        // Handle Key Press
+        function handleKeyPress(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        }
 
-    localVideo.srcObject = null;
-    remoteVideo.srcObject = null;
-    localVideo.style.display = "none";
-    videoEnabled = false;
-}
-
-// Toggle Video
-function toggleVideo() {
-    if (videoEnabled) {
-        stopVideo();
-        document.getElementById("videoIcon").textContent = "🚫";
-    } else {
-        startVideo();
-        document.getElementById("videoIcon").textContent = "📹";
-    }
-}
-
-// Create Peer Connection
-function createPeerConnection() {
-    peerConnection = new RTCPeerConnection(iceServers);
-
-    if (localStream) {
-        localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, localStream);
-        });
-    }
-
-    peerConnection.ontrack = (event) => {
-        remoteStream = event.streams[0];
-        remoteVideo.srcObject = remoteStream;
-    };
-
-    peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
+        // End Chat
+        function endChat() {
             ws.send(JSON.stringify({
-                type: "iceCandidate",
-                candidate: event.candidate,
-                to: selectedUser.id
+                type: "endChat",
+                userId: selectedUser?.id
             }));
+
+            cleanupChat();
+            showLobby();
         }
-    };
 
-    peerConnection.onconnectionstatechange = () => {
-        console.log("Connection state:", peerConnection.connectionState);
-    };
-}
+        // Handle Chat Ended
+        function handleChatEnded(data) {
+            cleanupChat();
+            showLobby();
 
-// Handle Offer (Admin receives from User)
-async function handleOffer(offer, from) {
-    if (currentUser.type !== "admin") return;
-
-    try {
-        createPeerConnection();
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-
-        ws.send(JSON.stringify({
-            type: "answer",
-            answer: answer,
-            to: from
-        }));
-    } catch (error) {
-        console.error("Error handling offer:", error);
-    }
-}
-
-// Handle Answer (User receives from Admin)
-async function handleAnswer(answer) {
-    if (currentUser.type !== "user") return;
-
-    try {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-    } catch (error) {
-        console.error("Error handling answer:", error);
-    }
-}
-
-// Handle ICE Candidate
-async function handleIceCandidate(candidate) {
-    try {
-        if (peerConnection) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            if (currentUser.type === "user" && data.queuePosition) {
+                updateQueuePosition(data.queuePosition);
+            }
         }
-    } catch (error) {
-        console.error("Error handling ICE candidate:", error);
-    }
-}
 
-// Utility function to escape HTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+        // Cleanup Chat
+        function cleanupChat() {
+            selectedUser = null;
+            messages = [];
+            stopVideo();
+        }
 
-// Cleanup on page unload
-window.addEventListener("beforeunload", () => {
-    if (ws) {
-        ws.close();
-    }
-    stopVideo();
-});
+        // Logout
+        function logout() {
+            if (ws) {
+                ws.close();
+            }
+            cleanupChat();
+            currentUser = { id: null, username: "", type: "user" };
+            usernameInput.value = "";
+            passwordInput.value = "";
+            loginScreen.classList.remove("hidden");
+            lobbyScreen.classList.add("hidden");
+            chatScreen.classList.add("hidden");
+        }
+
+        // === WebRTC Video Functions ===
+
+        // Start Video (User sends video to Admin)
+        async function startVideo() {
+            console.log("Starting video...");
+            
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: true 
+                });
+
+                console.log("Got local stream");
+
+                createPeerConnection();
+
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                console.log("Sending offer to admin");
+
+                ws.send(JSON.stringify({
+                    type: "offer",
+                    offer: offer,
+                    to: selectedUser.id
+                }));
+            } catch (error) {
+                console.error("Error starting video:", error);
+                alert("Could not access camera/microphone. Please check permissions.");
+            }
+        }
+
+        // Stop Video
+        function stopVideo() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            if (remoteStream) {
+                remoteStream = null;
+            }
+
+            remoteVideo.srcObject = null;
+        }
+
+        // Create Peer Connection
+        function createPeerConnection() {
+            console.log("Creating peer connection");
+            peerConnection = new RTCPeerConnection(iceServers);
+
+            if (localStream && currentUser.type === "user") {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                    console.log("Added track:", track.kind);
+                });
+            }
+
+            peerConnection.ontrack = (event) => {
+                console.log("Received remote track");
+                remoteStream = event.streams[0];
+                remoteVideo.srcObject = remoteStream;
+                noVideoMessage.classList.add("hidden");
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log("Sending ICE candidate");
+                    ws.send(JSON.stringify({
+                        type: "iceCandidate",
+                        candidate: event.candidate,
+                        to: selectedUser.id
+                    }));
+                }
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                console.log("Connection state:", peerConnection.connectionState);
+            };
+
+            peerConnection.oniceconnectionstatechange = () => {
+                console.log("ICE connection state:", peerConnection.iceConnectionState);
+            };
+        }
+
+        // Handle Offer (Admin receives from User)
+        async function handleOffer(offer, from) {
+            console.log("Received offer from user");
+            
+            if (currentUser.type !== "admin") return;
+
+            try {
+                createPeerConnection();
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                console.log("Sending answer to user");
+
+                ws.send(JSON.stringify({
+                    type: "answer",
+                    answer: answer,
+                    to: from
+                }));
+            } catch (error) {
+                console.error("Error handling offer:", error);
+            }
+        }
+
+        // Handle Answer (User receives from Admin)
+        async function handleAnswer(answer) {
+            console.log("Received answer from admin");
+            
+            if (currentUser.type !== "user") return;
+
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            } catch (error) {
+                console.error("Error handling answer:", error);
+            }
+        }
+
+        // Handle ICE Candidate
+        async function handleIceCandidate(candidate) {
+            console.log("Received ICE candidate");
+            
+            try {
+                if (peerConnection) {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            } catch (error) {
+                console.error("Error handling ICE candidate:", error);
+            }
+        }
+
+        // Utility function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Cleanup on page unload
+        window.addEventListener("beforeunload", () => {
+            if (ws) {
+                ws.close();
+            }
+            stopVideo();
+        });
     </script>
 </body>
 </html>
