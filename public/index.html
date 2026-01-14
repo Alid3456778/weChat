@@ -1,266 +1,945 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Student Chat Test</title>
-  <link rel="icon" href="data:;base64,iVBORw0KGgo="> <!-- Fixes favicon 404 -->
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0d1418; color: #e4e7ea; height: 100vh; overflow: hidden; }
-    #entry { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; gap: 20px; }
-    input, select, button { padding: 15px; border: none; border-radius: 25px; font-size: 16px; width: 280px; max-width: 90vw; }
-    input { background: #202c33; color: #e4e7ea; }
-    button { background: #00d4aa; color: #000; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #00bf94; }
-    button:disabled { background: #404c55; cursor: not-allowed; }
-    #lobby, #chat { display: none; height: 100vh; flex-direction: column; }
-    #lobby { background: #0d1418; }
-    #users { flex: 1; padding: 20px; overflow-y: auto; }
-    .user { display: flex; align-items: center; gap: 15px; padding: 15px; background: #202c33; margin-bottom: 10px; border-radius: 12px; cursor: pointer; transition: background 0.2s; }
-    .user:hover { background: #2a3942; }
-    .user.admin { border-left: 4px solid #00d4aa; }
-    .user.user { border-left: 4px solid #f79b4f; }
-    .status { font-size: 12px; opacity: 0.7; }
-    #chat { background: #0d1418; background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,0.02) 20px); }
-    #video-admin { display: none; width: 100%; height: 200px; background: #000; border-radius: 0 0 20px 20px; object-fit: cover; }
-    #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-    .message { max-width: 70%; padding: 10px 15px; border-radius: 18px; }
-    .message.sent { align-self: flex-end; background: #00d4aa; color: #000; border-bottom-right-radius: 4px; }
-    .message.received { align-self: flex-start; background: #2a3942; border-bottom-left-radius: 4px; }
-    .input-group { padding: 20px; display: flex; gap: 10px; background: #161f27; }
-    #messageInput { flex: 1; }
-    .online-dot { width: 10px; height: 10px; background: #00d4aa; border-radius: 50%; animation: blink 1.5s infinite; }
-    @keyframes blink { 0%, 80%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-    .hidden { display: none !important; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin-User Video Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 95%;
+            max-width: 1200px;
+            overflow: hidden;
+        }
+
+        /* Login Screen */
+        .login-screen {
+            padding: 60px 40px;
+            text-align: center;
+        }
+
+        .login-screen h1 {
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            text-align: left;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .radio-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 10px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .radio-group label:hover {
+            border-color: #667eea;
+            background: #f5f5ff;
+        }
+
+        .radio-group input[type="radio"]:checked + span {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .btn {
+            padding: 14px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #ff4757;
+            color: white;
+        }
+
+        .btn-success {
+            background: #2ecc71;
+            color: white;
+        }
+
+        /* Lobby Screen */
+        .lobby-screen {
+            display: flex;
+            height: 600px;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            border-right: 2px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.3em;
+            margin-bottom: 5px;
+        }
+
+        .user-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .user-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .user-item:hover {
+            border-color: #667eea;
+            transform: translateX(5px);
+        }
+
+        .user-item.online {
+            border-left: 4px solid #2ecc71;
+        }
+
+        .waiting-message {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #666;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .waiting-message h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .queue-info {
+            background: #fff3cd;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        /* Chat Screen */
+        .chat-screen {
+            display: flex;
+            height: 600px;
+        }
+
+        .video-section {
+            width: 400px;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-controls {
+            position: absolute;
+            bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .video-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .video-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .chat-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message.self {
+            align-items: flex-end;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            word-wrap: break-word;
+        }
+
+        .message.self .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.other .message-bubble {
+            background: white;
+            color: #333;
+        }
+
+        .message-sender {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .message-time {
+            font-size: 0.75em;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .message-input {
+            display: flex;
+            padding: 20px;
+            background: white;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        .message-input input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+
+        .message-input input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-waiting {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
 </head>
 <body>
-  <div id="entry">
-    <h1>Student Chat Test</h1>
-    <input id="nameInput" placeholder="Enter your name" value="">
-    <select id="roleSelect">
-      <option value="user">User (Student)</option>
-      <option value="admin">Admin (Teacher)</option>
-    </select>
-    <input id="adminPass" class="hidden" type="password" placeholder="Admin Password">
-    <button id="joinBtn">Join Lobby</button>
-  </div>
-  <div id="lobby">
-    <div style="padding: 20px; background: #161f27; border-bottom: 1px solid #2a3942;">
-      <span id="currentUser"></span> | <span id="status">Connecting...</span>
+    <div class="container">
+        <!-- Login Screen -->
+        <div id="loginScreen" class="login-screen">
+            <h1>🎥 Video Chat Platform</h1>
+            <div class="form-group">
+                <label>Your Name</label>
+                <input type="text" id="usernameInput" placeholder="Enter your name">
+            </div>
+            <div class="radio-group">
+                <label>
+                    <input type="radio" name="userType" value="user" checked>
+                    <span>User</span>
+                </label>
+                <label>
+                    <input type="radio" name="userType" value="admin">
+                    <span>Admin</span>
+                </label>
+            </div>
+            <div class="form-group hidden" id="passwordGroup">
+                <label>Admin Password</label>
+                <input type="password" id="passwordInput" placeholder="Enter admin password">
+            </div>
+            <button class="btn btn-primary" onclick="handleLogin()">Join</button>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div id="lobbyScreen" class="lobby-screen hidden">
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h2 id="lobbyTitle">Lobby</h2>
+                    <p id="lobbyUsername"></p>
+                    <button class="btn btn-danger" style="margin-top: 10px; width: 100%;" onclick="logout()">Logout</button>
+                </div>
+                <div class="user-list" id="userList"></div>
+            </div>
+            <div class="waiting-message" id="waitingArea">
+                <h2>👋 Welcome!</h2>
+                <p id="waitingText">Waiting for connection...</p>
+                <div id="queueInfo" class="queue-info hidden">
+                    <strong>Queue Position:</strong> <span id="queuePosition">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Screen -->
+        <div id="chatScreen" class="chat-screen hidden">
+            <div class="video-section">
+                <video id="remoteVideo" autoplay playsinline></video>
+                <video id="localVideo" autoplay playsinline muted style="display: none;"></video>
+                <div class="video-controls" id="videoControls" style="display: none;">
+                    <button class="video-btn" onclick="toggleVideo()">
+                        <span id="videoIcon">📹</span>
+                    </button>
+                </div>
+            </div>
+            <div class="chat-section">
+                <div class="chat-header">
+                    <div>
+                        <h3 id="chatWith">Chat</h3>
+                        <span class="status-badge status-online">Online</span>
+                    </div>
+                    <button class="btn btn-danger" onclick="endChat()">End Chat</button>
+                </div>
+                <div class="messages" id="messages"></div>
+                <div class="message-input">
+                    <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
+                    <button class="btn btn-success" onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
     </div>
-    <div id="users"></div>
-  </div>
-  <div id="chat">
-    <video id="video-admin" autoplay playsinline muted></video>
-    <div id="messages"></div>
-    <div class="input-group">
-      <input id="messageInput" placeholder="Type a message..." />
-      <button onclick="sendMessage()">Send</button>
-    </div>
-  </div>
 
-  <script>
-    (function() {  // IIFE fixes scope issues [memory:3]
-      const ADMIN_PASS = 'admin123'; // Change this
-      const WS_URL = window.location.hostname === 'localhost' ? 'ws://localhost:8080' : `wss://${window.location.host}`;
-      let ws, myId = crypto.randomUUID(), name, role, peer = null, dataChannel = null, currentRoom = null;
-      
-      const entry = document.getElementById('entry');
-      const lobby = document.getElementById('lobby');
-      const chat = document.getElementById('chat');
-      const nameInput = document.getElementById('nameInput');
-      const roleSelect = document.getElementById('roleSelect');
-      const adminPass = document.getElementById('adminPass');
-      const joinBtn = document.getElementById('joinBtn');
+    <script src="app.js"></script>
+    <script>
+      // Configuration
+const ADMIN_PASSWORD = "admin123"; // Change this password as needed
+const WS_URL = "wss://wechat-xhvo.onrender.com"; // Change to your Render.com WebSocket URL
 
-      // Load saved name
-      const savedName = localStorage.getItem('chatName');
-      if (savedName) nameInput.value = savedName;
+// Global variables
+let ws = null;
+let currentUser = {
+    id: null,
+    username: "",
+    type: "user"
+};
+let selectedUser = null;
+let messages = [];
+let localStream = null;
+let remoteStream = null;
+let peerConnection = null;
+let videoEnabled = false;
 
-      roleSelect.onchange = () => adminPass.classList.toggle('hidden', roleSelect.value !== 'admin');
-      
-      joinBtn.onclick = joinLobby;
+// WebRTC Configuration
+const iceServers = {
+    iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+    ]
+};
 
-      window.joinLobby = joinLobby;  // Global fallback
-      window.sendMessage = sendMessage;
-      window.requestConnect = requestConnect;
+// DOM Elements
+const loginScreen = document.getElementById("loginScreen");
+const lobbyScreen = document.getElementById("lobbyScreen");
+const chatScreen = document.getElementById("chatScreen");
+const usernameInput = document.getElementById("usernameInput");
+const passwordInput = document.getElementById("passwordInput");
+const passwordGroup = document.getElementById("passwordGroup");
+const userList = document.getElementById("userList");
+const messagesDiv = document.getElementById("messages");
+const messageInput = document.getElementById("messageInput");
+const localVideo = document.getElementById("localVideo");
+const remoteVideo = document.getElementById("remoteVideo");
+const videoControls = document.getElementById("videoControls");
 
+// Radio button listener
+document.querySelectorAll('input[name="userType"]').forEach(radio => {
+    radio.addEventListener("change", (e) => {
+        if (e.target.value === "admin") {
+            passwordGroup.classList.remove("hidden");
+        } else {
+            passwordGroup.classList.add("hidden");
+        }
+    });
+});
 
-      function joinLobby() {
-        name = nameInput.value.trim() || 'Anonymous';
-        role = roleSelect.value;
-        if (!name) return alert('Enter name');
-        localStorage.setItem('chatName', name);
-        if (role === 'admin' && adminPass.value !== ADMIN_PASS) return alert('Wrong password!');
-        entry.style.display = 'none';
-        lobby.style.display = 'flex';
-        document.getElementById('currentUser').textContent = `${role === 'admin' ? '👑 Admin' : '👤 User'}: ${name}`;
-        connectWS();
-      }
+// Login Handler
+function handleLogin() {
+    const username = usernameInput.value.trim();
+    const userType = document.querySelector('input[name="userType"]:checked').value;
+    const password = passwordInput.value;
 
-      function connectWS() {
-        ws = new WebSocket(WS_URL);
-        ws.onopen = () => {
-          ws.send(JSON.stringify({type: 'register', id: myId, name, role}));
-          document.getElementById('status').textContent = 'Online';
-        };
-        ws.onclose = () => document.getElementById('status').textContent = 'Disconnected';
-        ws.onerror = () => document.getElementById('status').textContent = 'Connection failed';
-        ws.onmessage = handleMessage;
-      }
-
-      function handleMessage(e) {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === 'userlist') {
-            updateUserList(msg.users.filter(u => u.id !== myId));
-          } else if (msg.type === 'connect-response') {
-            currentRoom = msg.room;
-            if (role === 'admin') initPeer(true); else initPeer(false);
-          } else if (msg.type === 'webrtc') {
-            handleWebRTC(msg);
-          }
-        } catch(err) { console.error('Msg error:', err); }
-      }
-
-      // function updateUserList(users) {
-      //   const container = document.getElementById('users');
-      //   container.innerHTML = users.map(u => {
-      //     const clickable = role === 'admin' && u.role === 'user' ? `onclick="requestConnect('${u.id}')"` : 'style="opacity:0.5;cursor:default" title="Users cannot connect"';
-      //     return `<div class="user ${u.role}" ${clickable}>
-      //       <div class="online-dot"></div>
-      //       <strong>${u.name}</strong>
-      //       <span class="status">${u.role === 'admin' ? '👑 Teacher' : '👤 Student'}</span>
-      //     </div>`;
-      //   }).join('');
-      //   document.getElementById('status').textContent = `${users.length} online`;
-      // }
-        function updateUserList(users) {
-  const container = document.getElementById('users');
-  container.innerHTML = users.map(u => {
-    let clickable = '';
-    if (role === 'admin' && u.role === 'user') {
-      clickable = `onclick="window.requestConnect('${u.id}')"`;  // Global reference
-    } else {
-      clickable = 'style="opacity:0.5;cursor:default" title="Users cannot connect"';
+    if (!username) {
+        alert("Please enter your name");
+        return;
     }
-    return `<div class="user" ${clickable}>
-      <div class="online-dot"></div>
-      <strong>${u.name}</strong>
-      <span class="status">${u.role === 'admin' ? '👑 Teacher' : '👤 Student'}</span>
-    </div>`;
-  }).join('');
-  document.getElementById('status').textContent = `${users.length} online`;
+
+    if (userType === "admin" && password !== ADMIN_PASSWORD) {
+        alert("Incorrect admin password");
+        return;
+    }
+
+    currentUser.username = username;
+    currentUser.type = userType;
+
+    connectWebSocket();
 }
 
+// WebSocket Connection
+function connectWebSocket() {
+    ws = new WebSocket(WS_URL);
 
-      function requestConnect(toId) {
-        ws.send(JSON.stringify({type: 'connect-request', fromId: myId, toId}));
-      }
+    ws.onopen = () => {
+        console.log("Connected to server");
+        ws.send(JSON.stringify({
+            type: "join",
+            username: currentUser.username,
+            userType: currentUser.type
+        }));
+        showLobby();
+    };
 
-      const rtcConfig = {
-        iceServers: [
-          {urls: 'stun:stun.l.google.com:19302'},
-          {urls: 'stun:stun1.l.google.com:19302'},
-          { // Fixed TURN syntax [web:28]
-            urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
-            credentialType: 'password'
-          }
-        ]
-      };
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleWebSocketMessage(data);
+    };
 
-      async function initPeer(isAdmin) {
-        peer = new RTCPeerConnection(rtcConfig);
-        
-        if (!isAdmin) {
-          // Student: share camera continuously
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'user'}, audio: false});
-            stream.getTracks().forEach(track => peer.addTrack(track, stream));
-          } catch(e) {
-            alert('Camera access required for students');
-            return;
-          }
-        }
-        
-        peer.ondatachannel = (e) => {
-          dataChannel = e.channel;
-          setupDataChannel();
-        };
-        
-        if (isAdmin) {
-          dataChannel = peer.createDataChannel('chat');
-          setupDataChannel();
-          peer.ontrack = (e) => {
-            const vid = document.getElementById('video-admin');
-            vid.srcObject = e.streams[0];
-            vid.onloadedmetadata = () => vid.play();
-            vid.style.display = 'block';
-          };
-        }
-        
-        peer.onicecandidate = (e) => {
-          if (e.candidate) {
-            ws.send(JSON.stringify({type: 'webrtc', fromId: myId, candidate: e.candidate, room: currentRoom}));
-          }
-        };
-        
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        ws.send(JSON.stringify({type: 'webrtc', fromId: myId, sdp: peer.localDescription, room: currentRoom}));
-        
-        lobby.style.display = 'none';
-        chat.style.display = 'flex';
-      }
+    ws.onclose = () => {
+        console.log("Disconnected from server");
+    };
 
-      function setupDataChannel() {
-        dataChannel.onopen = () => console.log('✅ Chat connected');
-        dataChannel.onmessage = (e) => addMessage(e.data, false);
-        dataChannel.onclose = () => console.log('Chat disconnected');
-      }
+    ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        alert("Connection error. Please check if the server is running.");
+    };
+}
 
-      function handleWebRTC(msg) {
-        if (!peer) return;
-        if (msg.candidate) {
-          peer.addIceCandidate(new RTCIceCandidate(msg.candidate));
-        }
-        if (msg.sdp) {
-          peer.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(async () => {
-            if (msg.sdp.type === 'offer') {
-              const answer = await peer.createAnswer();
-              await peer.setLocalDescription(answer);
-              ws.send(JSON.stringify({type: 'webrtc', fromId: myId, sdp: peer.localDescription, room: currentRoom}));
+// WebSocket Message Handler
+function handleWebSocketMessage(data) {
+    switch (data.type) {
+        case "welcome":
+            currentUser.id = data.userId;
+            break;
+
+        case "userList":
+            updateUserList(data.users);
+            break;
+
+        case "queuePosition":
+            updateQueuePosition(data.position);
+            break;
+
+        case "chatStarted":
+            startChat(data.with, data.messages);
+            break;
+
+        case "message":
+            receiveMessage(data);
+            break;
+
+        case "chatEnded":
+            handleChatEnded(data);
+            break;
+
+        case "offer":
+            handleOffer(data.offer, data.from);
+            break;
+
+        case "answer":
+            handleAnswer(data.answer);
+            break;
+
+        case "iceCandidate":
+            handleIceCandidate(data.candidate);
+            break;
+
+        case "videoRequest":
+            if (currentUser.type === "user") {
+                startVideo();
             }
-          }).catch(console.error);
+            break;
+
+        case "error":
+            alert(data.message);
+            break;
+    }
+}
+
+// Show Lobby
+function showLobby() {
+    loginScreen.classList.add("hidden");
+    lobbyScreen.classList.remove("hidden");
+    chatScreen.classList.add("hidden");
+
+    document.getElementById("lobbyTitle").textContent = 
+        currentUser.type === "admin" ? "Admin Lobby" : "User Lobby";
+    document.getElementById("lobbyUsername").textContent = 
+        `Logged in as: ${currentUser.username}`;
+
+    if (currentUser.type === "user") {
+        document.getElementById("waitingText").textContent = 
+            "Waiting for admin to connect...";
+    } else {
+        document.getElementById("waitingText").textContent = 
+            "Select a user to start chatting";
+    }
+}
+
+// Update User List (Admin only)
+function updateUserList(users) {
+    if (currentUser.type !== "admin") return;
+
+    userList.innerHTML = "";
+    users.forEach(user => {
+        if (user.type === "user") {
+            const userItem = document.createElement("div");
+            userItem.className = "user-item online";
+            userItem.innerHTML = `
+                <strong>${user.username}</strong>
+                <div style="font-size: 0.8em; color: #666;">Click to chat</div>
+            `;
+            userItem.onclick = () => selectUser(user);
+            userList.appendChild(userItem);
         }
-      }
+    });
 
-      function sendMessage() {
-        const input = document.getElementById('messageInput');
-        const text = input.value.trim();
-        if (!text || !dataChannel || dataChannel.readyState !== 'open') return;
-        dataChannel.send(text);
-        addMessage(text, true);
-        input.value = '';
-      }
+    if (userList.children.length === 0) {
+        userList.innerHTML = "<p style='padding: 20px; text-align: center; color: #999;'>No users online</p>";
+    }
+}
 
-      function addMessage(text, sent) {
-        const div = document.createElement('div');
-        div.className = `message ${sent ? 'sent' : 'received'}`;
-        div.textContent = text;
-        document.getElementById('messages').appendChild(div);
-        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
-      }
+// Update Queue Position (User only)
+function updateQueuePosition(position) {
+    if (currentUser.type !== "user") return;
 
-      // Enter to send
-      document.getElementById('messageInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
-      });
-    })();
-  </script>
+    const queueInfo = document.getElementById("queueInfo");
+    const queuePosition = document.getElementById("queuePosition");
+
+    if (position > 0) {
+        queueInfo.classList.remove("hidden");
+        queuePosition.textContent = position;
+    } else {
+        queueInfo.classList.add("hidden");
+    }
+}
+
+// Select User (Admin only)
+function selectUser(user) {
+    if (currentUser.type !== "admin") return;
+
+    ws.send(JSON.stringify({
+        type: "selectUser",
+        userId: user.id
+    }));
+}
+
+// Start Chat
+function startChat(user, chatMessages) {
+    selectedUser = user;
+    messages = chatMessages || [];
+
+    lobbyScreen.classList.add("hidden");
+    chatScreen.classList.remove("hidden");
+
+    document.getElementById("chatWith").textContent = 
+        `Chatting with ${user.username}`;
+
+    displayMessages();
+
+    if (currentUser.type === "admin") {
+        // Admin requests user's video
+        ws.send(JSON.stringify({
+            type: "requestVideo",
+            userId: user.id
+        }));
+        videoControls.style.display = "none";
+    } else {
+        videoControls.style.display = "flex";
+    }
+}
+
+// Display Messages
+function displayMessages() {
+    messagesDiv.innerHTML = "";
+    messages.forEach(msg => {
+        addMessageToUI(msg);
+    });
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// Add Message to UI
+function addMessageToUI(msg) {
+    const messageDiv = document.createElement("div");
+    messageDiv.className = `message ${msg.from === currentUser.username ? 'self' : 'other'}`;
+
+    const time = new Date(msg.timestamp).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+
+    messageDiv.innerHTML = `
+        <div class="message-sender">${msg.from}</div>
+        <div class="message-bubble">${escapeHtml(msg.text)}</div>
+        <div class="message-time">${time}</div>
+    `;
+
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// Send Message
+function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text || !ws) return;
+
+    const message = {
+        type: "message",
+        text: text,
+        to: selectedUser.id
+    };
+
+    ws.send(JSON.stringify(message));
+
+    const msg = {
+        from: currentUser.username,
+        text: text,
+        timestamp: new Date().toISOString()
+    };
+
+    messages.push(msg);
+    addMessageToUI(msg);
+    messageInput.value = "";
+}
+
+// Receive Message
+function receiveMessage(data) {
+    const msg = {
+        from: data.from,
+        text: data.text,
+        timestamp: data.timestamp
+    };
+
+    messages.push(msg);
+    addMessageToUI(msg);
+}
+
+// Handle Key Press
+function handleKeyPress(event) {
+    if (event.key === "Enter") {
+        sendMessage();
+    }
+}
+
+// End Chat
+function endChat() {
+    ws.send(JSON.stringify({
+        type: "endChat",
+        userId: selectedUser?.id
+    }));
+
+    cleanupChat();
+    showLobby();
+}
+
+// Handle Chat Ended
+function handleChatEnded(data) {
+    cleanupChat();
+    showLobby();
+
+    if (currentUser.type === "user" && data.queuePosition) {
+        updateQueuePosition(data.queuePosition);
+    }
+}
+
+// Cleanup Chat
+function cleanupChat() {
+    selectedUser = null;
+    messages = [];
+    stopVideo();
+}
+
+// Logout
+function logout() {
+    if (ws) {
+        ws.close();
+    }
+    cleanupChat();
+    currentUser = { id: null, username: "", type: "user" };
+    usernameInput.value = "";
+    passwordInput.value = "";
+    loginScreen.classList.remove("hidden");
+    lobbyScreen.classList.add("hidden");
+    chatScreen.classList.add("hidden");
+}
+
+// === WebRTC Video Functions ===
+
+// Start Video
+async function startVideo() {
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+            video: true, 
+            audio: true 
+        });
+
+        if (currentUser.type === "user") {
+            localVideo.srcObject = localStream;
+            localVideo.style.display = "block";
+        }
+
+        videoEnabled = true;
+
+        createPeerConnection();
+
+        if (currentUser.type === "user") {
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            ws.send(JSON.stringify({
+                type: "offer",
+                offer: offer,
+                to: selectedUser.id
+            }));
+        }
+    } catch (error) {
+        console.error("Error starting video:", error);
+        alert("Could not access camera/microphone. Please check permissions.");
+    }
+}
+
+// Stop Video
+function stopVideo() {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+
+    if (remoteStream) {
+        remoteStream = null;
+    }
+
+    localVideo.srcObject = null;
+    remoteVideo.srcObject = null;
+    localVideo.style.display = "none";
+    videoEnabled = false;
+}
+
+// Toggle Video
+function toggleVideo() {
+    if (videoEnabled) {
+        stopVideo();
+        document.getElementById("videoIcon").textContent = "🚫";
+    } else {
+        startVideo();
+        document.getElementById("videoIcon").textContent = "📹";
+    }
+}
+
+// Create Peer Connection
+function createPeerConnection() {
+    peerConnection = new RTCPeerConnection(iceServers);
+
+    if (localStream) {
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+    }
+
+    peerConnection.ontrack = (event) => {
+        remoteStream = event.streams[0];
+        remoteVideo.srcObject = remoteStream;
+    };
+
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            ws.send(JSON.stringify({
+                type: "iceCandidate",
+                candidate: event.candidate,
+                to: selectedUser.id
+            }));
+        }
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+        console.log("Connection state:", peerConnection.connectionState);
+    };
+}
+
+// Handle Offer (Admin receives from User)
+async function handleOffer(offer, from) {
+    if (currentUser.type !== "admin") return;
+
+    try {
+        createPeerConnection();
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        ws.send(JSON.stringify({
+            type: "answer",
+            answer: answer,
+            to: from
+        }));
+    } catch (error) {
+        console.error("Error handling offer:", error);
+    }
+}
+
+// Handle Answer (User receives from Admin)
+async function handleAnswer(answer) {
+    if (currentUser.type !== "user") return;
+
+    try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+    } catch (error) {
+        console.error("Error handling answer:", error);
+    }
+}
+
+// Handle ICE Candidate
+async function handleIceCandidate(candidate) {
+    try {
+        if (peerConnection) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+    } catch (error) {
+        console.error("Error handling ICE candidate:", error);
+    }
+}
+
+// Utility function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Cleanup on page unload
+window.addEventListener("beforeunload", () => {
+    if (ws) {
+        ws.close();
+    }
+    stopVideo();
+});
+    </script>
 </body>
 </html>
