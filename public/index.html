@@ -85,6 +85,8 @@
 
       window.joinLobby = joinLobby;  // Global fallback
       window.sendMessage = sendMessage;
+      window.requestConnect = requestConnect;
+
 
       function joinLobby() {
         name = nameInput.value.trim() || 'Anonymous';
@@ -123,18 +125,36 @@
         } catch(err) { console.error('Msg error:', err); }
       }
 
-      function updateUserList(users) {
-        const container = document.getElementById('users');
-        container.innerHTML = users.map(u => {
-          const clickable = role === 'admin' && u.role === 'user' ? `onclick="requestConnect('${u.id}')"` : 'style="opacity:0.5;cursor:default" title="Users cannot connect"';
-          return `<div class="user ${u.role}" ${clickable}>
-            <div class="online-dot"></div>
-            <strong>${u.name}</strong>
-            <span class="status">${u.role === 'admin' ? '👑 Teacher' : '👤 Student'}</span>
-          </div>`;
-        }).join('');
-        document.getElementById('status').textContent = `${users.length} online`;
-      }
+      // function updateUserList(users) {
+      //   const container = document.getElementById('users');
+      //   container.innerHTML = users.map(u => {
+      //     const clickable = role === 'admin' && u.role === 'user' ? `onclick="requestConnect('${u.id}')"` : 'style="opacity:0.5;cursor:default" title="Users cannot connect"';
+      //     return `<div class="user ${u.role}" ${clickable}>
+      //       <div class="online-dot"></div>
+      //       <strong>${u.name}</strong>
+      //       <span class="status">${u.role === 'admin' ? '👑 Teacher' : '👤 Student'}</span>
+      //     </div>`;
+      //   }).join('');
+      //   document.getElementById('status').textContent = `${users.length} online`;
+      // }
+        function updateUserList(users) {
+  const container = document.getElementById('users');
+  container.innerHTML = users.map(u => {
+    let clickable = '';
+    if (role === 'admin' && u.role === 'user') {
+      clickable = `onclick="window.requestConnect('${u.id}')"`;  // Global reference
+    } else {
+      clickable = 'style="opacity:0.5;cursor:default" title="Users cannot connect"';
+    }
+    return `<div class="user" ${clickable}>
+      <div class="online-dot"></div>
+      <strong>${u.name}</strong>
+      <span class="status">${u.role === 'admin' ? '👑 Teacher' : '👤 Student'}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('status').textContent = `${users.length} online`;
+}
+
 
       function requestConnect(toId) {
         ws.send(JSON.stringify({type: 'connect-request', fromId: myId, toId}));
