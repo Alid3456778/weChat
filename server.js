@@ -95,13 +95,14 @@ wss.on('connection', (ws) => {
             case 'endChat':
                 handleEndChat(data);
                 break;
-            case 'offer':
-            case 'answer':
-            case 'iceCandidate':
-                handleWebRTC(data);
+            case 'startVideoStream':
+                handleStartVideoStream(data);
                 break;
-            case 'requestVideo':
-                handleVideoRequest(data);
+            case 'stopVideoStream':
+                handleStopVideoStream(data);
+                break;
+            case 'videoFrame':
+                handleVideoFrame(data);
                 break;
             default:
                 console.log('Unknown message type:', data.type);
@@ -135,10 +136,10 @@ wss.on('connection', (ws) => {
                 return;
             }
             adminClient = client;
-            console.log(`Admin ${data.username} connected`);
+            console.log(`✅ Admin ${data.username} connected`);
             updateUserList();
         } else {
-            console.log(`User ${data.username} connected`);
+            console.log(`✅ User ${data.username} connected`);
             
             if (adminClient) {
                 userQueue.push(clientId);
@@ -256,6 +257,11 @@ wss.on('connection', (ws) => {
         if (otherUserId) {
             const otherClient = clients.get(otherUserId);
             if (otherClient) {
+                // Stop video stream
+                sendToClient(otherUserId, {
+                    type: 'stopVideoStream'
+                });
+
                 if (otherClient.type === 'user') {
                     userQueue.push(otherUserId);
                     sendToClient(otherUserId, {
@@ -274,34 +280,48 @@ wss.on('connection', (ws) => {
         updateUserList();
     }
 
-    function handleWebRTC(data) {
-        const toId = data.to;
-        console.log(`Forwarding ${data.type} to ${toId}`);
-        
-        if (toId) {
-            const forwardData = {
-                type: data.type,
-                from: clientId
-            };
-
-            if (data.offer) forwardData.offer = data.offer;
-            if (data.answer) forwardData.answer = data.answer;
-            if (data.candidate) forwardData.candidate = data.candidate;
-
-            sendToClient(toId, forwardData);
-        }
-    }
-
-    function handleVideoRequest(data) {
+    function handleStartVideoStream(data) {
         if (clients.get(clientId)?.type !== 'admin') {
             return;
         }
 
-        console.log('Admin requesting video from user:', data.userId);
+        const userId = data.userId;
+        console.log(`📹 Admin requesting video stream from user ${userId}`);
         
-        sendToClient(data.userId, {
-            type: 'videoRequest'
+        sendToClient(userId, {
+            type: 'startVideoStream'
         });
+    }
+
+    function handleStopVideoStream(data) {
+        if (clients.get(clientId)?.type !== 'admin') {
+            return;
+        }
+
+        const userId = data.userId;
+        console.log(`⏸️ Admin stopping video stream from user ${userId}`);
+        
+        sendToClient(userId, {
+            type: 'stopVideoStream'
+        });
+    }
+
+    function handleVideoFrame(data) {
+        const fromClient = clients.get(clientId);
+        if (!fromClient || fromClient.type !== 'user') {
+            return;
+        }
+
+        const toId = data.to;
+        
+        // Forward the frame to admin
+        if (toId && clients.has(toId)) {
+            sendToClient(toId, {
+                type: 'videoFrame',
+                frame: data.frame,
+                from: clientId
+            });
+        }
     }
 });
 
@@ -311,13 +331,16 @@ function handleDisconnect(clientId) {
     const client = clients.get(clientId);
     if (!client) return;
 
-    console.log(`${client.username} disconnected`);
+    console.log(`❌ ${client.username} disconnected`);
 
     if (client.type === 'admin') {
         adminClient = null;
 
         activeChats.forEach((partnerId, userId) => {
             if (userId !== clientId) {
+                sendToClient(userId, {
+                    type: 'stopVideoStream'
+                });
                 sendToClient(userId, {
                     type: 'chatEnded'
                 });
@@ -358,7 +381,8 @@ function handleDisconnect(clientId) {
 }
 
 server.listen(PORT, () => {
-    console.log(`✅ Server is running on port ${PORT}`);
-    console.log(`✅ WebSocket server is ready`);
-    console.log(`🌐 Access the app at http://localhost:${PORT}`);
+    console.log(`✅ Server running on port ${PORT}`);
+    console.log(`✅ WebSocket server ready`);
+    console.log(`✅ Frame streaming enabled`);
+    console.log(`🌐 Access at http://localhost:${PORT}`);
 });

@@ -5,346 +5,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin-User Video Chat</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            width: 95%;
-            max-width: 1200px;
-            overflow: hidden;
-        }
-
-        .login-screen {
-            padding: 60px 40px;
-            text-align: center;
-        }
-
-        .login-screen h1 {
-            color: #667eea;
-            margin-bottom: 30px;
-            font-size: 2.5em;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            text-align: left;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 600;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border 0.3s;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .radio-group {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin: 20px 0;
-        }
-
-        .radio-group label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            padding: 10px 20px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            transition: all 0.3s;
-        }
-
-        .radio-group label:hover {
-            border-color: #667eea;
-            background: #f5f5ff;
-        }
-
-        .radio-group input[type="radio"]:checked + span {
-            color: #667eea;
-            font-weight: 600;
-        }
-
-        .btn {
-            padding: 14px 40px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-danger {
-            background: #ff4757;
-            color: white;
-        }
-
-        .btn-success {
-            background: #2ecc71;
-            color: white;
-        }
-
-        .lobby-screen {
-            display: flex;
-            height: 600px;
-        }
-
-        .sidebar {
-            width: 300px;
-            background: #f8f9fa;
-            border-right: 2px solid #e0e0e0;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sidebar-header {
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .sidebar-header h2 {
-            font-size: 1.3em;
-            margin-bottom: 5px;
-        }
-
-        .user-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-        }
-
-        .user-item {
-            padding: 15px;
-            margin-bottom: 10px;
-            background: white;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            border: 2px solid transparent;
-        }
-
-        .user-item:hover {
-            border-color: #667eea;
-            transform: translateX(5px);
-        }
-
-        .user-item.online {
-            border-left: 4px solid #2ecc71;
-        }
-
-        .waiting-message {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: #666;
-            padding: 40px;
-            text-align: center;
-        }
-
-        .waiting-message h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-        }
-
-        .queue-info {
-            background: #fff3cd;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-        }
-
-        .chat-screen {
-            display: flex;
-            height: 600px;
-        }
-
-        .video-section {
-            width: 400px;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-        }
-
-        .no-video-message {
-            color: white;
-            text-align: center;
-            padding: 20px;
-        }
-
-        .connection-status {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            padding: 8px 12px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            border-radius: 5px;
-            font-size: 0.8em;
-            z-index: 10;
-        }
-
-        .connection-status.connecting {
-            background: rgba(255, 193, 7, 0.8);
-        }
-
-        .connection-status.connected {
-            background: rgba(40, 167, 69, 0.8);
-        }
-
-        .connection-status.failed {
-            background: rgba(220, 53, 69, 0.8);
-        }
-
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .chat-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .chat-header {
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background: #f8f9fa;
-        }
-
-        .message {
-            margin-bottom: 15px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .message.self {
-            align-items: flex-end;
-        }
-
-        .message-bubble {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 12px;
-            word-wrap: break-word;
-        }
-
-        .message.self .message-bubble {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .message.other .message-bubble {
-            background: white;
-            color: #333;
-        }
-
-        .message-sender {
-            font-size: 0.8em;
-            color: #666;
-            margin-bottom: 4px;
-        }
-
-        .message-time {
-            font-size: 0.75em;
-            color: #999;
-            margin-top: 4px;
-        }
-
-        .message-input {
-            display: flex;
-            padding: 20px;
-            background: white;
-            border-top: 2px solid #e0e0e0;
-        }
-
-        .message-input input {
-            flex: 1;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            margin-right: 10px;
-        }
-
-        .message-input input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.8em;
-            font-weight: 600;
-        }
-
-        .status-online {
-            background: #d4edda;
-            color: #155724;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .container { background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); width: 95%; max-width: 1200px; overflow: hidden; }
+        .login-screen { padding: 60px 40px; text-align: center; }
+        .login-screen h1 { color: #667eea; margin-bottom: 30px; font-size: 2.5em; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; text-align: left; margin-bottom: 8px; color: #333; font-weight: 600; }
+        .form-group input { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px; transition: border 0.3s; }
+        .form-group input:focus { outline: none; border-color: #667eea; }
+        .radio-group { display: flex; gap: 20px; justify-content: center; margin: 20px 0; }
+        .radio-group label { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px 20px; border: 2px solid #e0e0e0; border-radius: 8px; transition: all 0.3s; }
+        .radio-group label:hover { border-color: #667eea; background: #f5f5ff; }
+        .radio-group input[type="radio"]:checked + span { color: #667eea; font-weight: 600; }
+        .btn { padding: 14px 40px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4); }
+        .btn-danger { background: #ff4757; color: white; }
+        .btn-success { background: #2ecc71; color: white; }
+        .lobby-screen { display: flex; height: 600px; }
+        .sidebar { width: 300px; background: #f8f9fa; border-right: 2px solid #e0e0e0; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .sidebar-header h2 { font-size: 1.3em; margin-bottom: 5px; }
+        .user-list { flex: 1; overflow-y: auto; padding: 10px; }
+        .user-item { padding: 15px; margin-bottom: 10px; background: white; border-radius: 8px; cursor: pointer; transition: all 0.3s; border: 2px solid transparent; }
+        .user-item:hover { border-color: #667eea; transform: translateX(5px); }
+        .user-item.online { border-left: 4px solid #2ecc71; }
+        .waiting-message { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #666; padding: 40px; text-align: center; }
+        .waiting-message h2 { color: #667eea; margin-bottom: 20px; }
+        .queue-info { background: #fff3cd; padding: 20px; border-radius: 10px; margin-top: 20px; }
+        .chat-screen { display: flex; height: 600px; }
+        .video-section { width: 400px; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
+        .no-video-message { color: white; text-align: center; padding: 20px; }
+        .stream-status { position: absolute; top: 10px; right: 10px; padding: 8px 12px; background: rgba(0, 0, 0, 0.7); color: white; border-radius: 5px; font-size: 0.8em; z-index: 10; }
+        .stream-status.streaming { background: rgba(40, 167, 69, 0.8); }
+        .stream-status.stopped { background: rgba(220, 53, 69, 0.8); }
+        #remoteCanvas, #localVideo { width: 100%; height: 100%; object-fit: cover; }
+        #localVideo { display: none; }
+        .chat-section { flex: 1; display: flex; flex-direction: column; }
+        .chat-header { padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; justify-content: space-between; align-items: center; }
+        .messages { flex: 1; overflow-y: auto; padding: 20px; background: #f8f9fa; }
+        .message { margin-bottom: 15px; display: flex; flex-direction: column; }
+        .message.self { align-items: flex-end; }
+        .message-bubble { max-width: 70%; padding: 12px 16px; border-radius: 12px; word-wrap: break-word; }
+        .message.self .message-bubble { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .message.other .message-bubble { background: white; color: #333; }
+        .message-sender { font-size: 0.8em; color: #666; margin-bottom: 4px; }
+        .message-time { font-size: 0.75em; color: #999; margin-top: 4px; }
+        .message-input { display: flex; padding: 20px; background: white; border-top: 2px solid #e0e0e0; }
+        .message-input input { flex: 1; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px; margin-right: 10px; }
+        .message-input input:focus { outline: none; border-color: #667eea; }
+        .hidden { display: none !important; }
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+        .status-online { background: #d4edda; color: #155724; }
+        .fps-counter { position: absolute; top: 10px; left: 10px; padding: 4px 8px; background: rgba(0, 0, 0, 0.5); color: white; font-size: 0.7em; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -392,11 +106,14 @@
 
         <div id="chatScreen" class="chat-screen hidden">
             <div class="video-section" id="videoSection">
-                <div class="connection-status" id="connectionStatus">Connecting...</div>
-                <video id="remoteVideo" autoplay playsinline></video>
+                <div class="stream-status" id="streamStatus">⏸️ Stopped</div>
+                <div class="fps-counter" id="fpsCounter">0 FPS</div>
+                <canvas id="remoteCanvas"></canvas>
+                <video id="localVideo" autoplay muted playsinline></video>
+                <canvas id="captureCanvas" style="display: none;"></canvas>
                 <div class="no-video-message" id="noVideoMessage">
                     <h3>📹 Video Feed</h3>
-                    <p>Waiting for user's video...</p>
+                    <p>Waiting for user's video stream...</p>
                 </div>
             </div>
             
@@ -420,28 +137,17 @@
     <script>
         const ADMIN_PASSWORD = "admin123";
         const WS_URL = "wss://wechat-xhvo.onrender.com";
+        const FPS = 10; // Frames per second (adjust for quality vs bandwidth)
+        const JPEG_QUALITY = 0.7; // 0.1 to 1.0 (higher = better quality, more bandwidth)
 
         let ws = null;
         let currentUser = { id: null, username: "", type: "user" };
         let selectedUser = null;
         let messages = [];
         let localStream = null;
-        let peerConnection = null;
-        let iceCandidateQueue = [];
-
-        const iceServers = {
-            iceServers: [
-                { urls: "stun:stun.l.google.com:19302" },
-                { urls: "stun:stun1.l.google.com:19302" },
-                { urls: "stun:stun2.l.google.com:19302" },
-                { urls: "stun:stun3.l.google.com:19302" },
-                { urls: "stun:stun4.l.google.com:19302" },
-                { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-                { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-                { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
-            ],
-            iceCandidatePoolSize: 10
-        };
+        let streamingInterval = null;
+        let frameCount = 0;
+        let lastFpsUpdate = Date.now();
 
         const loginScreen = document.getElementById("loginScreen");
         const lobbyScreen = document.getElementById("lobbyScreen");
@@ -452,10 +158,13 @@
         const userList = document.getElementById("userList");
         const messagesDiv = document.getElementById("messages");
         const messageInput = document.getElementById("messageInput");
-        const remoteVideo = document.getElementById("remoteVideo");
+        const localVideo = document.getElementById("localVideo");
+        const captureCanvas = document.getElementById("captureCanvas");
+        const remoteCanvas = document.getElementById("remoteCanvas");
         const videoSection = document.getElementById("videoSection");
         const noVideoMessage = document.getElementById("noVideoMessage");
-        const connectionStatus = document.getElementById("connectionStatus");
+        const streamStatus = document.getElementById("streamStatus");
+        const fpsCounter = document.getElementById("fpsCounter");
 
         document.querySelectorAll('input[name="userType"]').forEach(radio => {
             radio.addEventListener("change", (e) => {
@@ -501,8 +210,10 @@
             };
 
             ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                handleWebSocketMessage(data);
+                if (typeof event.data === 'string') {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                }
             };
 
             ws.onclose = () => console.log("❌ Disconnected from server");
@@ -535,19 +246,19 @@
                 case "chatEnded":
                     handleChatEnded(data);
                     break;
-                case "offer":
-                    handleOffer(data.offer, data.from);
+                case "videoFrame":
+                    displayVideoFrame(data.frame);
                     break;
-                case "answer":
-                    handleAnswer(data.answer);
-                    break;
-                case "iceCandidate":
-                    handleIceCandidate(data.candidate);
-                    break;
-                case "videoRequest":
+                case "startVideoStream":
                     if (currentUser.type === "user") {
-                        console.log("📹 Admin requested video");
-                        startVideo();
+                        console.log("📹 Admin requested video stream");
+                        startVideoStream();
+                    }
+                    break;
+                case "stopVideoStream":
+                    if (currentUser.type === "user") {
+                        console.log("⏸️ Admin stopped video stream");
+                        stopVideoStream();
                     }
                     break;
                 case "error":
@@ -633,33 +344,21 @@
             if (currentUser.type === "admin") {
                 videoSection.classList.remove("hidden");
                 noVideoMessage.classList.remove("hidden");
-                updateConnectionStatus("connecting");
+                
+                // Setup canvas for receiving frames
+                const ctx = remoteCanvas.getContext('2d');
+                remoteCanvas.width = 640;
+                remoteCanvas.height = 480;
                 
                 setTimeout(() => {
-                    console.log("📹 Requesting user video...");
+                    console.log("📹 Requesting video stream from user...");
                     ws.send(JSON.stringify({
-                        type: "requestVideo",
+                        type: "startVideoStream",
                         userId: user.id
                     }));
                 }, 1000);
             } else {
                 videoSection.classList.add("hidden");
-            }
-        }
-
-        function updateConnectionStatus(status) {
-            connectionStatus.className = `connection-status ${status}`;
-            switch(status) {
-                case 'connecting':
-                    connectionStatus.textContent = '🔄 Connecting...';
-                    break;
-                case 'connected':
-                    connectionStatus.textContent = '✅ Connected';
-                    setTimeout(() => connectionStatus.style.display = 'none', 3000);
-                    break;
-                case 'failed':
-                    connectionStatus.textContent = '❌ Connection Failed';
-                    break;
             }
         }
 
@@ -748,7 +447,7 @@
         function cleanupChat() {
             selectedUser = null;
             messages = [];
-            stopVideo();
+            stopVideoStream();
         }
 
         function logout() {
@@ -762,46 +461,105 @@
             chatScreen.classList.add("hidden");
         }
 
-        async function startVideo() {
-            console.log("🎥 Starting video stream...");
+        // ====== FRAME STREAMING VIDEO FUNCTIONS ======
+
+        async function startVideoStream() {
+            console.log("🎥 Starting frame streaming...");
             
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, 
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: "user"
+                    }, 
+                    audio: false // We'll handle audio separately if needed
                 });
 
-                console.log("✅ Got local stream");
+                localVideo.srcObject = localStream;
+                await localVideo.play();
 
-                createPeerConnection();
+                console.log("✅ Camera access granted");
 
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                    console.log("➕ Added track:", track.kind);
-                });
+                // Setup capture canvas
+                captureCanvas.width = 640;
+                captureCanvas.height = 480;
 
-                const offer = await peerConnection.createOffer({
-                    offerToReceiveVideo: true,
-                    offerToReceiveAudio: true
-                });
-                
-                await peerConnection.setLocalDescription(offer);
-                console.log("📤 Sending offer to admin");
+                updateStreamStatus("streaming");
 
-                ws.send(JSON.stringify({
-                    type: "offer",
-                    offer: offer,
-                    to: selectedUser.id
-                }));
+                // Start capturing and sending frames
+                streamingInterval = setInterval(() => {
+                    captureAndSendFrame();
+                }, 1000 / FPS);
+
+                console.log(`📹 Streaming at ${FPS} FPS`);
+
             } catch (error) {
-                console.error("❌ Error starting video:", error);
-                alert("Could not access camera/microphone. Please check permissions and try again.");
+                console.error("❌ Error accessing camera:", error);
+                alert("Could not access camera. Please check permissions.");
             }
         }
 
-        function stopVideo() {
-            console.log("🛑 Stopping video...");
+        function captureAndSendFrame() {
+            if (!localStream || !ws || ws.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            const ctx = captureCanvas.getContext('2d');
             
+            // Draw current video frame to canvas
+            ctx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+            
+            // Convert canvas to JPEG base64
+            const frameData = captureCanvas.toDataURL('image/jpeg', JPEG_QUALITY);
+            
+            // Send frame to server
+            ws.send(JSON.stringify({
+                type: "videoFrame",
+                frame: frameData,
+                to: selectedUser.id
+            }));
+
+            // Update FPS counter
+            frameCount++;
+            const now = Date.now();
+            if (now - lastFpsUpdate >= 1000) {
+                fpsCounter.textContent = `${frameCount} FPS`;
+                frameCount = 0;
+                lastFpsUpdate = now;
+            }
+        }
+
+        function displayVideoFrame(frameData) {
+            if (currentUser.type !== "admin") return;
+
+            const img = new Image();
+            img.onload = () => {
+                const ctx = remoteCanvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, remoteCanvas.width, remoteCanvas.height);
+                noVideoMessage.classList.add("hidden");
+                updateStreamStatus("streaming");
+
+                // Update FPS counter
+                frameCount++;
+                const now = Date.now();
+                if (now - lastFpsUpdate >= 1000) {
+                    fpsCounter.textContent = `${frameCount} FPS`;
+                    frameCount = 0;
+                    lastFpsUpdate = now;
+                }
+            };
+            img.src = frameData;
+        }
+
+        function stopVideoStream() {
+            console.log("🛑 Stopping video stream...");
+            
+            if (streamingInterval) {
+                clearInterval(streamingInterval);
+                streamingInterval = null;
+            }
+
             if (localStream) {
                 localStream.getTracks().forEach(track => {
                     track.stop();
@@ -810,138 +568,23 @@
                 localStream = null;
             }
 
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-                console.log("🔌 Closed peer connection");
-            }
+            localVideo.srcObject = null;
+            updateStreamStatus("stopped");
+            frameCount = 0;
+            fpsCounter.textContent = "0 FPS";
 
-            remoteVideo.srcObject = null;
-            iceCandidateQueue = [];
-        }
-
-        function createPeerConnection() {
-            console.log("🔗 Creating peer connection with TURN servers...");
-            peerConnection = new RTCPeerConnection(iceServers);
-
-            peerConnection.ontrack = (event) => {
-                console.log("📹 Received remote track:", event.track.kind);
-                remoteVideo.srcObject = event.streams[0];
-                noVideoMessage.classList.add("hidden");
-                updateConnectionStatus("connected");
-                console.log("✅ Video stream connected successfully");
-            };
-
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    console.log("🧊 Sending ICE candidate:", event.candidate.type);
-                    ws.send(JSON.stringify({
-                        type: "iceCandidate",
-                        candidate: event.candidate,
-                        to: selectedUser.id
-                    }));
-                } else {
-                    console.log("✅ All ICE candidates sent");
-                }
-            };
-
-            peerConnection.onconnectionstatechange = () => {
-                console.log("🔗 Connection state:", peerConnection.connectionState);
-                
-                if (peerConnection.connectionState === "connected") {
-                    updateConnectionStatus("connected");
-                } else if (peerConnection.connectionState === "failed") {
-                    updateConnectionStatus("failed");
-                    console.error("❌ Connection failed - attempting to restart ICE...");
-                    peerConnection.restartIce();
-                } else if (peerConnection.connectionState === "disconnected") {
-                    console.log("⚠️ Connection disconnected");
-                }
-            };
-
-            peerConnection.oniceconnectionstatechange = () => {
-                console.log("🧊 ICE connection state:", peerConnection.iceConnectionState);
-                
-                if (peerConnection.iceConnectionState === "failed") {
-                    console.error("❌ ICE connection failed");
-                    updateConnectionStatus("failed");
-                }
-            };
-
-            peerConnection.onicegatheringstatechange = () => {
-                console.log("🧊 ICE gathering state:", peerConnection.iceGatheringState);
-            };
-
-            return peerConnection;
-        }
-
-        async function handleOffer(offer, from) {
-            console.log("📥 Received offer from user");
-            
-            if (currentUser.type !== "admin") return;
-
-            try {
-                createPeerConnection();
-                
-                console.log("📝 Setting remote description...");
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-
-                while (iceCandidateQueue.length > 0) {
-                    const candidate = iceCandidateQueue.shift();
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                    console.log("✅ Added queued ICE candidate");
-                }
-
-                console.log("📝 Creating answer...");
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-
-                console.log("📤 Sending answer to user");
-                ws.send(JSON.stringify({
-                    type: "answer",
-                    answer: answer,
-                    to: from
-                }));
-            } catch (error) {
-                console.error("❌ Error handling offer:", error);
-                updateConnectionStatus("failed");
+            if (currentUser.type === "admin") {
+                noVideoMessage.classList.remove("hidden");
             }
         }
 
-        async function handleAnswer(answer) {
-            console.log("📥 Received answer from admin");
-            
-            if (currentUser.type !== "user") return;
-
-            try {
-                console.log("📝 Setting remote description...");
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                
-                while (iceCandidateQueue.length > 0) {
-                    const candidate = iceCandidateQueue.shift();
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                    console.log("✅ Added queued ICE candidate");
-                }
-                
-                console.log("✅ Answer processed successfully");
-            } catch (error) {
-                console.error("❌ Error handling answer:", error);
-            }
-        }
-
-        async function handleIceCandidate(candidate) {
-            console.log("📥 Received ICE candidate");
-            
-            try {
-                if (peerConnection && peerConnection.remoteDescription) {
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                    console.log("✅ ICE candidate added successfully");
-                } else {
-                    console.log("⚠️ Peer connection not ready, queueing candidate");
-                    iceCandidateQueue.push(candidate);
-                }
-            } catch (error) {
-                console.error("❌ Error handling ICE candidate:", error);
+        function updateStreamStatus(status) {
+            if (status === "streaming") {
+                streamStatus.className = "stream-status streaming";
+                streamStatus.textContent = "🔴 Live";
+            } else {
+                streamStatus.className = "stream-status stopped";
+                streamStatus.textContent = "⏸️ Stopped";
             }
         }
 
@@ -953,7 +596,7 @@
 
         window.addEventListener("beforeunload", () => {
             if (ws) ws.close();
-            stopVideo();
+            stopVideoStream();
         });
     </script>
 </body>
