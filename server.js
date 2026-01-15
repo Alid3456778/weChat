@@ -29,40 +29,9 @@ function generateId() {
 function sendToClient(clientId, message) {
     const client = clients.get(clientId);
     if (client && client.ws.readyState === WebSocket.OPEN) {
-        // Priority messages (chat) sent immediately
-        if (message.priority === true) {
-            client.ws.send(JSON.stringify(message));
-            console.log(`💬 Priority message sent to ${clientId}`);
-        } else {
-            // Low priority messages (video frames) queued
-            if (!messageQueues.has(clientId)) {
-                messageQueues.set(clientId, []);
-            }
-            const queue = messageQueues.get(clientId);
-            
-            // HARD LIMIT: Only 1 frame in queue
-            if (queue.length >= 1) {
-                queue.shift(); // Remove oldest frame immediately
-            }
-            
-            queue.push(message);
-        }
+        client.ws.send(JSON.stringify(message));
     }
 }
-
-// Process message queues FAST for all clients
-function processMessageQueues() {
-    messageQueues.forEach((queue, clientId) => {
-        const client = clients.get(clientId);
-        if (client && client.ws.readyState === WebSocket.OPEN && queue.length > 0) {
-            const message = queue.shift();
-            client.ws.send(JSON.stringify(message));
-        }
-    });
-}
-
-// Process queues every 50ms (faster than before)
-setInterval(processMessageQueues, 50);
 
 function updateUserList() {
     if (!adminClient) return;
@@ -264,16 +233,12 @@ wss.on('connection', (ws) => {
         }
         chatHistory.get(chatKey).push(message);
 
-        // Send with priority flag
         sendToClient(toId, {
             type: 'message',
             from: fromClient.username,
             text: data.text,
-            timestamp: message.timestamp,
-            priority: true // HIGH PRIORITY - send immediately
+            timestamp: message.timestamp
         });
-
-        console.log(`💬 Message from ${fromClient.username} to ${toClient.username}`);
     }
 
     function handleEndChat(data) {
@@ -350,13 +315,12 @@ wss.on('connection', (ws) => {
 
         const toId = data.to;
         
-        // Forward the frame to admin (low priority)
+        // Forward the frame to admin
         if (toId && clients.has(toId)) {
             sendToClient(toId, {
                 type: 'videoFrame',
                 frame: data.frame,
-                from: clientId,
-                priority: false // LOW PRIORITY - queued
+                from: clientId
             });
         }
     }
@@ -369,9 +333,6 @@ function handleDisconnect(clientId) {
     if (!client) return;
 
     console.log(`❌ ${client.username} disconnected`);
-
-    // Clean up message queue
-    messageQueues.delete(clientId);
 
     if (client.type === 'admin') {
         adminClient = null;
