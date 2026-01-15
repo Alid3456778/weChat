@@ -430,7 +430,7 @@ function sendToClient(clientId, message) {
             const queue = messageQueues.get(clientId);
             
             // Keep queue small (max 3 frames)
-            if (queue.length >= 3) {
+            if (queue.length >= 2) {
                 queue.shift(); // Remove oldest frame
             }
             
@@ -451,7 +451,8 @@ function processMessageQueues() {
 }
 
 // Process queues every 100ms
-setInterval(processMessageQueues, 100);
+// setInterval(processMessageQueues, 100);
+setInterval(processMessageQueues, 50); // Faster (more CPU)
 
 function updateUserList() {
     if (!adminClient) return;
