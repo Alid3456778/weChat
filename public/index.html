@@ -139,7 +139,6 @@
         const WS_URL = "wss://wechat-xhvo.onrender.com";
         const FPS = 10; // Frames per second (adjust for quality vs bandwidth)
         const JPEG_QUALITY = 0.7; // 0.1 to 1.0 (higher = better quality, more bandwidth)
-        const MESSAGE_PRIORITY_PAUSE = 200; // Pause video frames for 200ms when sending message
 
         let ws = null;
         let currentUser = { id: null, username: "", type: "user" };
@@ -149,9 +148,6 @@
         let streamingInterval = null;
         let frameCount = 0;
         let lastFpsUpdate = Date.now();
-        let isMessageBeingSent = false; // Flag to pause video frames
-        let frameQueue = []; // Queue for video frames
-        let frameQueueInterval = null;
 
         const loginScreen = document.getElementById("loginScreen");
         const lobbyScreen = document.getElementById("lobbyScreen");
@@ -395,18 +391,11 @@
             const text = messageInput.value.trim();
             if (!text || !ws) return;
 
-            // PRIORITY: Pause video frames when sending message
-            isMessageBeingSent = true;
-
-            const message = {
+            ws.send(JSON.stringify({
                 type: "message",
                 text: text,
-                to: selectedUser.id,
-                priority: true // Mark as high priority
-            };
-
-            // Send message immediately
-            ws.send(JSON.stringify(message));
+                to: selectedUser.id
+            }));
 
             const msg = {
                 from: currentUser.username,
@@ -417,13 +406,6 @@
             messages.push(msg);
             addMessageToUI(msg);
             messageInput.value = "";
-
-            // Resume video frames after delay
-            setTimeout(() => {
-                isMessageBeingSent = false;
-            }, MESSAGE_PRIORITY_PAUSE);
-
-            console.log("💬 Message sent with priority");
         }
 
         function receiveMessage(data) {
@@ -510,12 +492,7 @@
                     captureAndSendFrame();
                 }, 1000 / FPS);
 
-                // Start frame queue processor (sends frames smoothly)
-                frameQueueInterval = setInterval(() => {
-                    processFrameQueue();
-                }, 50); // Process queue every 50ms
-
-                console.log(`📹 Streaming at ${FPS} FPS with message priority`);
+                console.log(`📹 Streaming at ${FPS} FPS`);
 
             } catch (error) {
                 console.error("❌ Error accessing camera:", error);
@@ -528,12 +505,6 @@
                 return;
             }
 
-            // PRIORITY: Skip frame if message is being sent
-            if (isMessageBeingSent) {
-                console.log("⏸️ Skipping frame - message priority");
-                return;
-            }
-
             const ctx = captureCanvas.getContext('2d');
             
             // Draw current video frame to canvas
@@ -542,13 +513,12 @@
             // Convert canvas to JPEG base64
             const frameData = captureCanvas.toDataURL('image/jpeg', JPEG_QUALITY);
             
-            // Queue the frame instead of sending immediately
-            frameQueue.push({
+            // Send frame to server
+            ws.send(JSON.stringify({
                 type: "videoFrame",
                 frame: frameData,
-                to: selectedUser.id,
-                priority: false // Low priority
-            });
+                to: selectedUser.id
+            }));
 
             // Update FPS counter
             frameCount++;
@@ -557,19 +527,6 @@
                 fpsCounter.textContent = `${frameCount} FPS`;
                 frameCount = 0;
                 lastFpsUpdate = now;
-            }
-        }
-
-        // Process frame queue - sends frames one at a time
-        function processFrameQueue() {
-            if (frameQueue.length > 0 && !isMessageBeingSent && ws && ws.readyState === WebSocket.OPEN) {
-                // Keep only the latest 2 frames to prevent queue buildup
-                if (frameQueue.length > 2) {
-                    frameQueue = frameQueue.slice(-2);
-                }
-
-                const frame = frameQueue.shift();
-                ws.send(JSON.stringify(frame));
             }
         }
 
@@ -603,11 +560,6 @@
                 streamingInterval = null;
             }
 
-            if (frameQueueInterval) {
-                clearInterval(frameQueueInterval);
-                frameQueueInterval = null;
-            }
-
             if (localStream) {
                 localStream.getTracks().forEach(track => {
                     track.stop();
@@ -620,8 +572,6 @@
             updateStreamStatus("stopped");
             frameCount = 0;
             fpsCounter.textContent = "0 FPS";
-            frameQueue = []; // Clear frame queue
-            isMessageBeingSent = false;
 
             if (currentUser.type === "admin") {
                 noVideoMessage.classList.remove("hidden");
