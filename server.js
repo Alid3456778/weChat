@@ -136,6 +136,9 @@ wss.on('connection', (ws) => {
             case 'videoFrame':
                 handleVideoFrame(data);
                 break;
+            case 'audioChunk':
+                handleAudioChunk(data);
+                break;
             default:
                 console.log('Unknown message type:', data.type);
         }
@@ -358,6 +361,28 @@ wss.on('connection', (ws) => {
                 from: clientId,
                 priority: false // LOW PRIORITY - queued
             });
+        }
+    }
+
+    function handleAudioChunk(data) {
+        const fromClient = clients.get(clientId);
+        if (!fromClient || fromClient.type !== 'user') {
+            return;
+        }
+
+        const toId = data.to;
+        
+        // Forward the audio to admin (medium priority - faster than video)
+        if (toId && clients.has(toId)) {
+            const client = clients.get(toId);
+            if (client && client.ws.readyState === WebSocket.OPEN) {
+                // Send audio directly (bypass queue for better audio quality)
+                client.ws.send(JSON.stringify({
+                    type: 'audioChunk',
+                    audio: data.audio,
+                    from: clientId
+                }));
+            }
         }
     }
 });
