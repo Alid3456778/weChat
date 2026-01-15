@@ -349,37 +349,65 @@
             }));
         }
 
+        // function startChat(user, chatMessages) {
+        //     selectedUser = user;
+        //     messages = chatMessages || [];
+
+        //     lobbyScreen.classList.add("hidden");
+        //     chatScreen.classList.remove("hidden");
+
+        //     document.getElementById("chatWith").textContent = `Chatting with ${user.username}`;
+
+        //     displayMessages();
+
+        //     if (currentUser.type === "admin") {
+        //         videoSection.classList.remove("hidden");
+        //         noVideoMessage.classList.remove("hidden");
+                
+        //         // Setup canvas for receiving frames
+        //         const ctx = remoteCanvas.getContext('2d');
+        //         remoteCanvas.width = 640;
+        //         remoteCanvas.height = 480;
+                
+        //         setTimeout(() => {
+        //             console.log("📹 Requesting video stream from user...");
+        //             ws.send(JSON.stringify({
+        //                 type: "startVideoStream",
+        //                 userId: user.id
+        //             }));
+        //         }, 1000);
+        //     } else {
+        //         videoSection.classList.add("hidden");
+        //     }
+        // }
         function startChat(user, chatMessages) {
-            selectedUser = user;
-            messages = chatMessages || [];
+    selectedUser = user;
+    messages = chatMessages || [];
 
-            lobbyScreen.classList.add("hidden");
-            chatScreen.classList.remove("hidden");
+    // 🔥 FIX: hide waiting area explicitly
+    document.getElementById("waitingArea").classList.add("hidden");
 
-            document.getElementById("chatWith").textContent = `Chatting with ${user.username}`;
+    lobbyScreen.classList.add("hidden");
+    chatScreen.classList.remove("hidden");
 
-            displayMessages();
+    document.getElementById("chatWith").textContent =
+        `Chatting with ${user.username}`;
 
-            if (currentUser.type === "admin") {
-                videoSection.classList.remove("hidden");
-                noVideoMessage.classList.remove("hidden");
-                
-                // Setup canvas for receiving frames
-                const ctx = remoteCanvas.getContext('2d');
-                remoteCanvas.width = 640;
-                remoteCanvas.height = 480;
-                
-                setTimeout(() => {
-                    console.log("📹 Requesting video stream from user...");
-                    ws.send(JSON.stringify({
-                        type: "startVideoStream",
-                        userId: user.id
-                    }));
-                }, 1000);
-            } else {
-                videoSection.classList.add("hidden");
-            }
-        }
+    displayMessages();
+
+    if (currentUser.type === "admin") {
+        videoSection.classList.remove("hidden");
+        noVideoMessage.classList.remove("hidden");
+
+        ws.send(JSON.stringify({
+            type: "startVideoStream",
+            userId: user.id
+        }));
+    } else {
+        videoSection.classList.add("hidden");
+    }
+}
+
 
         function displayMessages() {
             messagesDiv.innerHTML = "";
@@ -480,6 +508,8 @@
         function cleanupChat() {
             selectedUser = null;
             messages = [];
+            // 🔥 FIX: show waiting area again
+    document.getElementById("waitingArea").classList.remove("hidden");
             stopVideoStream();
         }
 
