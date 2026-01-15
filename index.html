@@ -159,11 +159,6 @@
         let lastFrameTime = Date.now();
         let frameDropCount = 0;
         let isEncoding = false; // Prevent concurrent encoding
-        let audioContext = null;
-        let audioProcessor = null;
-        let audioChunks = [];
-        let lastAudioSend = Date.now();
-        const AUDIO_SEND_INTERVAL = 100; // Send audio every 100ms
 
         const loginScreen = document.getElementById("loginScreen");
         const lobbyScreen = document.getElementById("lobbyScreen");
@@ -265,9 +260,6 @@
                 case "videoFrame":
                     displayVideoFrame(data.frame);
                     break;
-                case "audioChunk":
-                    playAudioChunk(data.audio);
-                    break;
                 case "startVideoStream":
                     if (currentUser.type === "user") {
                         console.log("📹 Admin requested video stream");
@@ -349,65 +341,37 @@
             }));
         }
 
-        // function startChat(user, chatMessages) {
-        //     selectedUser = user;
-        //     messages = chatMessages || [];
-
-        //     lobbyScreen.classList.add("hidden");
-        //     chatScreen.classList.remove("hidden");
-
-        //     document.getElementById("chatWith").textContent = `Chatting with ${user.username}`;
-
-        //     displayMessages();
-
-        //     if (currentUser.type === "admin") {
-        //         videoSection.classList.remove("hidden");
-        //         noVideoMessage.classList.remove("hidden");
-                
-        //         // Setup canvas for receiving frames
-        //         const ctx = remoteCanvas.getContext('2d');
-        //         remoteCanvas.width = 640;
-        //         remoteCanvas.height = 480;
-                
-        //         setTimeout(() => {
-        //             console.log("📹 Requesting video stream from user...");
-        //             ws.send(JSON.stringify({
-        //                 type: "startVideoStream",
-        //                 userId: user.id
-        //             }));
-        //         }, 1000);
-        //     } else {
-        //         videoSection.classList.add("hidden");
-        //     }
-        // }
         function startChat(user, chatMessages) {
-    selectedUser = user;
-    messages = chatMessages || [];
+            selectedUser = user;
+            messages = chatMessages || [];
 
-    // 🔥 FIX: hide waiting area explicitly
-    document.getElementById("waitingArea").classList.add("hidden");
+            lobbyScreen.classList.add("hidden");
+            chatScreen.classList.remove("hidden");
 
-    lobbyScreen.classList.add("hidden");
-    chatScreen.classList.remove("hidden");
+            document.getElementById("chatWith").textContent = `Chatting with ${user.username}`;
 
-    document.getElementById("chatWith").textContent =
-        `Chatting with ${user.username}`;
+            displayMessages();
 
-    displayMessages();
-
-    if (currentUser.type === "admin") {
-        videoSection.classList.remove("hidden");
-        noVideoMessage.classList.remove("hidden");
-
-        ws.send(JSON.stringify({
-            type: "startVideoStream",
-            userId: user.id
-        }));
-    } else {
-        videoSection.classList.add("hidden");
-    }
-}
-
+            if (currentUser.type === "admin") {
+                videoSection.classList.remove("hidden");
+                noVideoMessage.classList.remove("hidden");
+                
+                // Setup canvas for receiving frames
+                const ctx = remoteCanvas.getContext('2d');
+                remoteCanvas.width = 640;
+                remoteCanvas.height = 480;
+                
+                setTimeout(() => {
+                    console.log("📹 Requesting video stream from user...");
+                    ws.send(JSON.stringify({
+                        type: "startVideoStream",
+                        userId: user.id
+                    }));
+                }, 1000);
+            } else {
+                videoSection.classList.add("hidden");
+            }
+        }
 
         function displayMessages() {
             messagesDiv.innerHTML = "";
@@ -508,8 +472,6 @@
         function cleanupChat() {
             selectedUser = null;
             messages = [];
-            // 🔥 FIX: show waiting area again
-    document.getElementById("waitingArea").classList.remove("hidden");
             stopVideoStream();
         }
 
@@ -522,106 +484,6 @@
             loginScreen.classList.remove("hidden");
             lobbyScreen.classList.add("hidden");
             chatScreen.classList.add("hidden");
-        }
-
-        // ====== AUDIO STREAMING FUNCTIONS ======
-
-        function startAudioStreaming() {
-            try {
-                // Get audio track
-                const audioTrack = localStream.getAudioTracks()[0];
-                if (!audioTrack) {
-                    console.warn("⚠️ No audio track found");
-                    return;
-                }
-
-                // Create audio context
-                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-                const source = audioContext.createMediaStreamSource(new MediaStream([audioTrack]));
-
-                // Create script processor for audio chunks
-                audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
-
-                audioProcessor.onaudioprocess = (event) => {
-                    const inputData = event.inputBuffer.getChannelData(0);
-                    
-                    // Convert Float32Array to base64 for transmission
-                    const audioData = Array.from(inputData);
-                    
-                    // Send audio chunks periodically to avoid overwhelming WebSocket
-                    const now = Date.now();
-                    if (now - lastAudioSend >= AUDIO_SEND_INTERVAL) {
-                        sendAudioChunk(audioData);
-                        lastAudioSend = now;
-                    }
-                };
-
-                source.connect(audioProcessor);
-                audioProcessor.connect(audioContext.destination);
-
-                console.log("🎤 Audio streaming started");
-
-            } catch (error) {
-                console.error("❌ Audio streaming error:", error);
-            }
-        }
-
-        function sendAudioChunk(audioData) {
-            if (!ws || ws.readyState !== WebSocket.OPEN || isMessageBeingSent) {
-                return;
-            }
-
-            // Compress audio data (reduce precision for smaller payload)
-            const compressed = audioData.map(v => Math.round(v * 32767) / 32767);
-
-            ws.send(JSON.stringify({
-                type: "audioChunk",
-                audio: compressed,
-                to: selectedUser.id,
-                priority: false
-            }));
-        }
-
-        function playAudioChunk(audioData) {
-            if (currentUser.type !== "admin") return;
-
-            try {
-                if (!audioContext) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-                }
-
-                // Create audio buffer
-                const audioBuffer = audioContext.createBuffer(1, audioData.length, audioContext.sampleRate);
-                const channelData = audioBuffer.getChannelData(0);
-                
-                // Fill buffer with received data
-                for (let i = 0; i < audioData.length; i++) {
-                    channelData[i] = audioData[i];
-                }
-
-                // Create source and play
-                const source = audioContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(audioContext.destination);
-                source.start();
-
-            } catch (error) {
-                console.error("❌ Audio playback error:", error);
-            }
-        }
-
-        function stopAudioStreaming() {
-            if (audioProcessor) {
-                audioProcessor.disconnect();
-                audioProcessor = null;
-            }
-
-            if (audioContext) {
-                audioContext.close();
-                audioContext = null;
-            }
-
-            console.log("🎤 Audio streaming stopped");
         }
 
         // ====== FRAME STREAMING VIDEO FUNCTIONS ======
@@ -821,9 +683,6 @@
                 clearInterval(frameQueueInterval);
                 frameQueueInterval = null;
             }
-
-            // Stop audio streaming
-            stopAudioStreaming();
 
             if (localStream) {
                 localStream.getTracks().forEach(track => {
