@@ -109,7 +109,7 @@
                 <div class="stream-status" id="streamStatus">⏸️ Stopped</div>
                 <div class="fps-counter" id="fpsCounter">0 FPS</div>
                 <canvas id="remoteCanvas"></canvas>
-                <video id="localVideo" autoplay playsinline></video>
+                <video id="localVideo" autoplay muted playsinline></video>
                 <canvas id="captureCanvas" style="display: none;"></canvas>
                 <div class="no-video-message" id="noVideoMessage">
                     <h3>📹 Video Feed</h3>
@@ -137,9 +137,12 @@
     <script>
         const ADMIN_PASSWORD = "admin123";
         const WS_URL = "wss://wechat-xhvo.onrender.com";
-        const FPS = 10; // Frames per second (adjust for quality vs bandwidth)
-        const JPEG_QUALITY = 0.8; // 0.1 to 1.0 (higher = better quality, more bandwidth)
-        const MESSAGE_PRIORITY_PAUSE = 200; // Pause video frames for 200ms when sending message
+        const BASE_FPS = 10; // Base frames per second
+        const MIN_FPS = 5; // Minimum FPS when congested
+        const MAX_FPS = 15; // Maximum FPS when clear
+        const JPEG_QUALITY = 0.6; // Reduced quality for faster encoding
+        const MESSAGE_PRIORITY_PAUSE = 300; // Longer pause for messages
+        const MAX_FRAME_QUEUE = 1; // HARD LIMIT: Only 1 frame queued
 
         let ws = null;
         let currentUser = { id: null, username: "", type: "user" };
@@ -149,9 +152,13 @@
         let streamingInterval = null;
         let frameCount = 0;
         let lastFpsUpdate = Date.now();
-        let isMessageBeingSent = false; // Flag to pause video frames
-        let frameQueue = []; // Queue for video frames
+        let isMessageBeingSent = false;
+        let frameQueue = [];
         let frameQueueInterval = null;
+        let currentFPS = BASE_FPS; // Dynamic FPS
+        let lastFrameTime = Date.now();
+        let frameDropCount = 0;
+        let isEncoding = false; // Prevent concurrent encoding
 
         const loginScreen = document.getElementById("loginScreen");
         const lobbyScreen = document.getElementById("lobbyScreen");
@@ -499,23 +506,23 @@
 
                 console.log("✅ Camera access granted");
 
-                // Setup capture canvas
-                captureCanvas.width = 640;
-                captureCanvas.height = 480;
+                // Setup capture canvas with smaller resolution for faster encoding
+                captureCanvas.width = 480; // Reduced from 640
+                captureCanvas.height = 360; // Reduced from 480
 
                 updateStreamStatus("streaming");
 
                 // Start capturing and sending frames
                 streamingInterval = setInterval(() => {
                     captureAndSendFrame();
-                }, 1000 / FPS);
+                }, 1000 / currentFPS);
 
-                // Start frame queue processor (sends frames smoothly)
+                // Start frame queue processor (sends frames FAST - every 30ms)
                 frameQueueInterval = setInterval(() => {
                     processFrameQueue();
-                }, 50); // Process queue every 50ms
+                }, 30); // Faster processing: 30ms instead of 50ms
 
-                console.log(`📹 Streaming at ${FPS} FPS with message priority`);
+                console.log(`📹 Streaming started at ${currentFPS} FPS (${captureCanvas.width}x${captureCanvas.height})`);
 
             } catch (error) {
                 console.error("❌ Error accessing camera:", error);
@@ -534,40 +541,99 @@
                 return;
             }
 
-            const ctx = captureCanvas.getContext('2d');
-            
-            // Draw current video frame to canvas
-            ctx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
-            
-            // Convert canvas to JPEG base64
-            const frameData = captureCanvas.toDataURL('image/jpeg', JPEG_QUALITY);
-            
-            // Queue the frame instead of sending immediately
-            frameQueue.push({
-                type: "videoFrame",
-                frame: frameData,
-                to: selectedUser.id,
-                priority: false // Low priority
-            });
+            // ANTI-CONGESTION: Skip if already encoding
+            if (isEncoding) {
+                frameDropCount++;
+                console.log(`⚠️ Frame dropped - still encoding (${frameDropCount} total)`);
+                adjustFPS('drop');
+                return;
+            }
 
-            // Update FPS counter
-            frameCount++;
-            const now = Date.now();
-            if (now - lastFpsUpdate >= 1000) {
-                fpsCounter.textContent = `${frameCount} FPS`;
-                frameCount = 0;
-                lastFpsUpdate = now;
+            // ANTI-CONGESTION: Skip if queue is full
+            if (frameQueue.length >= MAX_FRAME_QUEUE) {
+                frameDropCount++;
+                console.log(`⚠️ Frame dropped - queue full (${frameDropCount} total)`);
+                adjustFPS('drop');
+                return;
+            }
+
+            isEncoding = true;
+            const startTime = performance.now();
+
+            try {
+                const ctx = captureCanvas.getContext('2d');
+                
+                // Draw current video frame to canvas
+                ctx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+                
+                // Convert canvas to JPEG base64 (THIS IS SLOW!)
+                const frameData = captureCanvas.toDataURL('image/jpeg', JPEG_QUALITY);
+                
+                const encodingTime = performance.now() - startTime;
+                console.log(`⏱️ Encoding took ${encodingTime.toFixed(0)}ms`);
+                
+                // HARD LIMIT: Only queue if empty
+                if (frameQueue.length < MAX_FRAME_QUEUE) {
+                    frameQueue.push({
+                        type: "videoFrame",
+                        frame: frameData,
+                        to: selectedUser.id,
+                        priority: false
+                    });
+                    
+                    adjustFPS('success');
+                }
+
+                // Update FPS counter
+                frameCount++;
+                const now = Date.now();
+                if (now - lastFpsUpdate >= 1000) {
+                    fpsCounter.textContent = `${frameCount} FPS (Target: ${currentFPS})`;
+                    frameCount = 0;
+                    lastFpsUpdate = now;
+                    
+                    // Reset drop counter display
+                    if (frameDropCount > 0) {
+                        console.log(`📊 Dropped ${frameDropCount} frames in last second`);
+                        frameDropCount = 0;
+                    }
+                }
+
+            } catch (error) {
+                console.error("❌ Frame encoding error:", error);
+            } finally {
+                isEncoding = false;
             }
         }
 
-        // Process frame queue - sends frames one at a time
+        // Dynamic FPS adjustment based on performance
+        function adjustFPS(status) {
+            if (status === 'drop') {
+                // Frame dropped - slow down
+                currentFPS = Math.max(MIN_FPS, currentFPS - 1);
+                updateStreamingInterval();
+            } else if (status === 'success') {
+                // Frame sent successfully - can speed up slightly
+                if (frameQueue.length === 0 && frameDropCount === 0) {
+                    currentFPS = Math.min(MAX_FPS, currentFPS + 0.5);
+                    updateStreamingInterval();
+                }
+            }
+        }
+
+        function updateStreamingInterval() {
+            if (streamingInterval) {
+                clearInterval(streamingInterval);
+                streamingInterval = setInterval(() => {
+                    captureAndSendFrame();
+                }, 1000 / currentFPS);
+            }
+        }
+
+        // Process frame queue - sends frames one at a time FAST
         function processFrameQueue() {
             if (frameQueue.length > 0 && !isMessageBeingSent && ws && ws.readyState === WebSocket.OPEN) {
-                // Keep only the latest 2 frames to prevent queue buildup
-                if (frameQueue.length > 2) {
-                    frameQueue = frameQueue.slice(-2);
-                }
-
+                // HARD LIMIT: Only 1 frame in queue, send immediately
                 const frame = frameQueue.shift();
                 ws.send(JSON.stringify(frame));
             }
@@ -579,6 +645,11 @@
             const img = new Image();
             img.onload = () => {
                 const ctx = remoteCanvas.getContext('2d');
+                
+                // Use smoothing for better quality
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                
                 ctx.drawImage(img, 0, 0, remoteCanvas.width, remoteCanvas.height);
                 noVideoMessage.classList.add("hidden");
                 updateStreamStatus("streaming");
@@ -592,6 +663,11 @@
                     lastFpsUpdate = now;
                 }
             };
+            
+            img.onerror = () => {
+                console.error("❌ Failed to load frame");
+            };
+            
             img.src = frameData;
         }
 
@@ -620,8 +696,11 @@
             updateStreamStatus("stopped");
             frameCount = 0;
             fpsCounter.textContent = "0 FPS";
-            frameQueue = []; // Clear frame queue
+            frameQueue = [];
             isMessageBeingSent = false;
+            isEncoding = false;
+            currentFPS = BASE_FPS;
+            frameDropCount = 0;
 
             if (currentUser.type === "admin") {
                 noVideoMessage.classList.remove("hidden");
