@@ -139,7 +139,7 @@
         const WS_URL = "wss://wechat-xhvo.onrender.com";
         const FPS = 10; // Frames per second (adjust for quality vs bandwidth)
         const JPEG_QUALITY = 0.8; // 0.1 to 1.0 (higher = better quality, more bandwidth)
-        const MESSAGE_PRIORITY_PAUSE = 100; // Pause video frames for 200ms when sending message
+        const MESSAGE_PRIORITY_PAUSE = 200; // Pause video frames for 200ms when sending message
 
         let ws = null;
         let currentUser = { id: null, username: "", type: "user" };
