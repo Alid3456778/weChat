@@ -59,7 +59,7 @@
         .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
         .status-online { background: #d4edda; color: #155724; }
         .fps-counter { position: absolute; top: 10px; left: 10px; padding: 4px 8px; background: rgba(0, 0, 0, 0.5); color: white; font-size: 0.7em; border-radius: 3px; }
-        .debug-panel { position: fixed; display: none; bottom: 10px; right: 10px; background: rgba(0, 0, 0, 0.8); color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 0.7em; max-width: 300px; max-height: 200px; overflow-y: auto; z-index: 1000; }
+        .debug-panel { position: fixed; bottom: 10px; right: 10px; background: rgba(0, 0, 0, 0.8); color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 0.7em; max-width: 300px; max-height: 200px; overflow-y: auto; z-index: 1000; }
         .debug-panel div { margin: 2px 0; }
     </style>
 </head>
@@ -315,6 +315,7 @@
                     break;
                 case "audioChunk":
                     playAudioChunk(data.audio);
+                    // Don't log every chunk (too many), just count
                     break;
                 case "startVideoStream":
                     if (currentUser.type === "user") {
@@ -607,8 +608,12 @@
                 const audioTrack = localStream.getAudioTracks()[0];
                 if (!audioTrack) {
                     console.warn("⚠️ No audio track found");
+                    addDebugLog("⚠️ No audio track");
                     return;
                 }
+
+                console.log("🎤 Audio track found:", audioTrack.label);
+                addDebugLog("🎤 Audio track OK");
 
                 // Create audio context
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -616,6 +621,8 @@
 
                 // Create script processor for audio chunks
                 audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                let audioChunkCount = 0;
 
                 audioProcessor.onaudioprocess = (event) => {
                     const inputData = event.inputBuffer.getChannelData(0);
@@ -627,6 +634,11 @@
                     const now = Date.now();
                     if (now - lastAudioSend >= AUDIO_SEND_INTERVAL) {
                         sendAudioChunk(audioData);
+                        audioChunkCount++;
+                        if (audioChunkCount === 1) {
+                            console.log("🎤 First audio chunk sent");
+                            addDebugLog("🎤 Sending audio");
+                        }
                         lastAudioSend = now;
                     }
                 };
@@ -635,9 +647,11 @@
                 audioProcessor.connect(audioContext.destination);
 
                 console.log("🎤 Audio streaming started");
+                addDebugLog("🎤 Audio streaming ON");
 
             } catch (error) {
                 console.error("❌ Audio streaming error:", error);
+                addDebugLog(`❌ Audio error: ${error.message}`);
             }
         }
 
@@ -657,12 +671,16 @@
             }));
         }
 
+        let receivedAudioCount = 0;
+
         function playAudioChunk(audioData) {
             if (currentUser.type !== "admin") return;
 
             try {
                 if (!audioContext) {
                     audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                    console.log("🔊 Audio context created for playback");
+                    addDebugLog("🔊 Audio context ready");
                 }
 
                 // Create audio buffer
@@ -680,8 +698,18 @@
                 source.connect(audioContext.destination);
                 source.start();
 
+                receivedAudioCount++;
+                if (receivedAudioCount === 1) {
+                    console.log("🔊 First audio chunk received and playing");
+                    addDebugLog("🔊 Audio playing");
+                }
+                if (receivedAudioCount % 50 === 0) {
+                    console.log(`🔊 Received ${receivedAudioCount} audio chunks`);
+                }
+
             } catch (error) {
                 console.error("❌ Audio playback error:", error);
+                addDebugLog(`❌ Playback error: ${error.message}`);
             }
         }
 
