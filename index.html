@@ -29,7 +29,6 @@
             overflow: hidden;
         }
 
-        /* Login Screen */
         .login-screen {
             padding: 60px 40px;
             text-align: center;
@@ -125,7 +124,6 @@
             color: white;
         }
 
-        /* Lobby Screen */
         .lobby-screen {
             display: flex;
             height: 600px;
@@ -198,7 +196,6 @@
             margin-top: 20px;
         }
 
-        /* Chat Screen */
         .chat-screen {
             display: flex;
             height: 600px;
@@ -218,6 +215,30 @@
             color: white;
             text-align: center;
             padding: 20px;
+        }
+
+        .connection-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border-radius: 5px;
+            font-size: 0.8em;
+            z-index: 10;
+        }
+
+        .connection-status.connecting {
+            background: rgba(255, 193, 7, 0.8);
+        }
+
+        .connection-status.connected {
+            background: rgba(40, 167, 69, 0.8);
+        }
+
+        .connection-status.failed {
+            background: rgba(220, 53, 69, 0.8);
         }
 
         video {
@@ -324,16 +345,10 @@
             background: #d4edda;
             color: #155724;
         }
-
-        .status-waiting {
-            background: #fff3cd;
-            color: #856404;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Login Screen -->
         <div id="loginScreen" class="login-screen">
             <h1>🎥 Video Chat Platform</h1>
             <div class="form-group">
@@ -357,7 +372,6 @@
             <button class="btn btn-primary" onclick="handleLogin()">Join</button>
         </div>
 
-        <!-- Lobby Screen -->
         <div id="lobbyScreen" class="lobby-screen hidden">
             <div class="sidebar">
                 <div class="sidebar-header">
@@ -376,10 +390,9 @@
             </div>
         </div>
 
-        <!-- Chat Screen -->
         <div id="chatScreen" class="chat-screen hidden">
-            <!-- Video Section (Only visible for Admin) -->
             <div class="video-section" id="videoSection">
+                <div class="connection-status" id="connectionStatus">Connecting...</div>
                 <video id="remoteVideo" autoplay playsinline></video>
                 <div class="no-video-message" id="noVideoMessage">
                     <h3>📹 Video Feed</h3>
@@ -405,54 +418,31 @@
     </div>
 
     <script>
-        // Configuration
-        const ADMIN_PASSWORD = "admin123"; // Change this password as needed
-        const WS_URL = "wss://wechat-xhvo.onrender.com"; // Your Render WebSocket URL
+        const ADMIN_PASSWORD = "admin123";
+        const WS_URL = "wss://wechat-xhvo.onrender.com";
 
-        // Global variables
         let ws = null;
-        let currentUser = {
-            id: null,
-            username: "",
-            type: "user"
-        };
+        let currentUser = { id: null, username: "", type: "user" };
         let selectedUser = null;
         let messages = [];
         let localStream = null;
-        let remoteStream = null;
         let peerConnection = null;
+        let iceCandidateQueue = [];
 
-        // Enhanced WebRTC Configuration with TURN servers for cross-network connections
         const iceServers = {
             iceServers: [
-                // Google STUN servers
                 { urls: "stun:stun.l.google.com:19302" },
                 { urls: "stun:stun1.l.google.com:19302" },
                 { urls: "stun:stun2.l.google.com:19302" },
                 { urls: "stun:stun3.l.google.com:19302" },
                 { urls: "stun:stun4.l.google.com:19302" },
-                
-                // Free TURN servers (Metered - allows cross-network connections)
-                {
-                    urls: "turn:openrelay.metered.ca:80",
-                    username: "openrelayproject",
-                    credential: "openrelayproject"
-                },
-                {
-                    urls: "turn:openrelay.metered.ca:443",
-                    username: "openrelayproject",
-                    credential: "openrelayproject"
-                },
-                {
-                    urls: "turn:openrelay.metered.ca:443?transport=tcp",
-                    username: "openrelayproject",
-                    credential: "openrelayproject"
-                }
+                { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+                { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+                { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
             ],
             iceCandidatePoolSize: 10
         };
 
-        // DOM Elements
         const loginScreen = document.getElementById("loginScreen");
         const lobbyScreen = document.getElementById("lobbyScreen");
         const chatScreen = document.getElementById("chatScreen");
@@ -465,8 +455,8 @@
         const remoteVideo = document.getElementById("remoteVideo");
         const videoSection = document.getElementById("videoSection");
         const noVideoMessage = document.getElementById("noVideoMessage");
+        const connectionStatus = document.getElementById("connectionStatus");
 
-        // Radio button listener
         document.querySelectorAll('input[name="userType"]').forEach(radio => {
             radio.addEventListener("change", (e) => {
                 if (e.target.value === "admin") {
@@ -477,7 +467,6 @@
             });
         });
 
-        // Login Handler
         function handleLogin() {
             const username = usernameInput.value.trim();
             const userType = document.querySelector('input[name="userType"]:checked').value;
@@ -495,11 +484,9 @@
 
             currentUser.username = username;
             currentUser.type = userType;
-
             connectWebSocket();
         }
 
-        // WebSocket Connection
         function connectWebSocket() {
             ws = new WebSocket(WS_URL);
 
@@ -518,17 +505,13 @@
                 handleWebSocketMessage(data);
             };
 
-            ws.onclose = () => {
-                console.log("❌ Disconnected from server");
-            };
-
+            ws.onclose = () => console.log("❌ Disconnected from server");
             ws.onerror = (error) => {
                 console.error("❌ WebSocket error:", error);
                 alert("Connection error. Please check if the server is running.");
             };
         }
 
-        // WebSocket Message Handler
         function handleWebSocketMessage(data) {
             console.log("📨 Received:", data.type);
             
@@ -537,53 +520,42 @@
                     currentUser.id = data.userId;
                     console.log("👤 User ID:", currentUser.id);
                     break;
-
                 case "userList":
                     updateUserList(data.users);
                     break;
-
                 case "queuePosition":
                     updateQueuePosition(data.position);
                     break;
-
                 case "chatStarted":
                     startChat(data.with, data.messages);
                     break;
-
                 case "message":
                     receiveMessage(data);
                     break;
-
                 case "chatEnded":
                     handleChatEnded(data);
                     break;
-
                 case "offer":
                     handleOffer(data.offer, data.from);
                     break;
-
                 case "answer":
                     handleAnswer(data.answer);
                     break;
-
                 case "iceCandidate":
                     handleIceCandidate(data.candidate);
                     break;
-
                 case "videoRequest":
                     if (currentUser.type === "user") {
                         console.log("📹 Admin requested video");
                         startVideo();
                     }
                     break;
-
                 case "error":
                     alert(data.message);
                     break;
             }
         }
 
-        // Show Lobby
         function showLobby() {
             loginScreen.classList.add("hidden");
             lobbyScreen.classList.remove("hidden");
@@ -595,15 +567,12 @@
                 `Logged in as: ${currentUser.username}`;
 
             if (currentUser.type === "user") {
-                document.getElementById("waitingText").textContent = 
-                    "Waiting for admin to connect...";
+                document.getElementById("waitingText").textContent = "Waiting for admin to connect...";
             } else {
-                document.getElementById("waitingText").textContent = 
-                    "Select a user to start chatting";
+                document.getElementById("waitingText").textContent = "Select a user to start chatting";
             }
         }
 
-        // Update User List (Admin only)
         function updateUserList(users) {
             if (currentUser.type !== "admin") return;
 
@@ -626,7 +595,6 @@
             }
         }
 
-        // Update Queue Position (User only)
         function updateQueuePosition(position) {
             if (currentUser.type !== "user") return;
 
@@ -641,7 +609,6 @@
             }
         }
 
-        // Select User (Admin only)
         function selectUser(user) {
             if (currentUser.type !== "admin") return;
 
@@ -652,7 +619,6 @@
             }));
         }
 
-        // Start Chat
         function startChat(user, chatMessages) {
             selectedUser = user;
             messages = chatMessages || [];
@@ -660,18 +626,15 @@
             lobbyScreen.classList.add("hidden");
             chatScreen.classList.remove("hidden");
 
-            document.getElementById("chatWith").textContent = 
-                `Chatting with ${user.username}`;
+            document.getElementById("chatWith").textContent = `Chatting with ${user.username}`;
 
             displayMessages();
 
-            // Handle video section visibility
             if (currentUser.type === "admin") {
                 videoSection.classList.remove("hidden");
                 noVideoMessage.classList.remove("hidden");
                 updateConnectionStatus("connecting");
                 
-                // Request user's video after a short delay
                 setTimeout(() => {
                     console.log("📹 Requesting user video...");
                     ws.send(JSON.stringify({
@@ -680,12 +643,10 @@
                     }));
                 }, 1000);
             } else {
-                // User doesn't see video section at all
                 videoSection.classList.add("hidden");
             }
         }
 
-        // Update connection status indicator
         function updateConnectionStatus(status) {
             connectionStatus.className = `connection-status ${status}`;
             switch(status) {
@@ -694,6 +655,7 @@
                     break;
                 case 'connected':
                     connectionStatus.textContent = '✅ Connected';
+                    setTimeout(() => connectionStatus.style.display = 'none', 3000);
                     break;
                 case 'failed':
                     connectionStatus.textContent = '❌ Connection Failed';
@@ -701,16 +663,12 @@
             }
         }
 
-        // Display Messages
         function displayMessages() {
             messagesDiv.innerHTML = "";
-            messages.forEach(msg => {
-                addMessageToUI(msg);
-            });
+            messages.forEach(msg => addMessageToUI(msg));
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        // Add Message to UI
         function addMessageToUI(msg) {
             const messageDiv = document.createElement("div");
             messageDiv.className = `message ${msg.from === currentUser.username ? 'self' : 'other'}`;
@@ -730,18 +688,15 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        // Send Message
         function sendMessage() {
             const text = messageInput.value.trim();
             if (!text || !ws) return;
 
-            const message = {
+            ws.send(JSON.stringify({
                 type: "message",
                 text: text,
                 to: selectedUser.id
-            };
-
-            ws.send(JSON.stringify(message));
+            }));
 
             const msg = {
                 from: currentUser.username,
@@ -754,7 +709,6 @@
             messageInput.value = "";
         }
 
-        // Receive Message
         function receiveMessage(data) {
             const msg = {
                 from: data.from,
@@ -766,14 +720,12 @@
             addMessageToUI(msg);
         }
 
-        // Handle Key Press
         function handleKeyPress(event) {
             if (event.key === "Enter") {
                 sendMessage();
             }
         }
 
-        // End Chat
         function endChat() {
             ws.send(JSON.stringify({
                 type: "endChat",
@@ -784,7 +736,6 @@
             showLobby();
         }
 
-        // Handle Chat Ended
         function handleChatEnded(data) {
             cleanupChat();
             showLobby();
@@ -794,18 +745,14 @@
             }
         }
 
-        // Cleanup Chat
         function cleanupChat() {
             selectedUser = null;
             messages = [];
             stopVideo();
         }
 
-        // Logout
         function logout() {
-            if (ws) {
-                ws.close();
-            }
+            if (ws) ws.close();
             cleanupChat();
             currentUser = { id: null, username: "", type: "user" };
             usernameInput.value = "";
@@ -815,39 +762,24 @@
             chatScreen.classList.add("hidden");
         }
 
-        // === WebRTC Video Functions ===
-
-        // Start Video (User sends video to Admin)
         async function startVideo() {
             console.log("🎥 Starting video stream...");
             
             try {
-                // Request higher quality video
                 localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: {
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        facingMode: "user"
-                    }, 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, 
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
                 });
 
                 console.log("✅ Got local stream");
 
-                // Create peer connection and start negotiation
-                await createPeerConnection();
+                createPeerConnection();
 
-                // Add all tracks to peer connection
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
-                    console.log("➕ Added track:", track.kind, track.label);
+                    console.log("➕ Added track:", track.kind);
                 });
 
-                // Create and send offer
                 const offer = await peerConnection.createOffer({
                     offerToReceiveVideo: true,
                     offerToReceiveAudio: true
@@ -862,59 +794,11 @@
                     to: selectedUser.id
                 }));
             } catch (error) {
-                console.error("❌ Error handling offer:", error);
-                updateConnectionStatus("failed");
+                console.error("❌ Error starting video:", error);
+                alert("Could not access camera/microphone. Please check permissions and try again.");
             }
         }
 
-        // Handle Answer (User receives from Admin)
-        async function handleAnswer(answer) {
-            console.log("📥 Received answer from admin");
-            
-            if (currentUser.type !== "user") return;
-
-            try {
-                console.log("📝 Setting remote description...");
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                console.log("✅ Answer processed successfully");
-            } catch (error) {
-                console.error("❌ Error handling answer:", error);
-            }
-        }
-
-        // Handle ICE Candidate
-        async function handleIceCandidate(candidate) {
-            console.log("📥 Received ICE candidate");
-            
-            try {
-                if (peerConnection && peerConnection.remoteDescription) {
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                    console.log("✅ ICE candidate added successfully");
-                } else {
-                    console.log("⚠️ Peer connection not ready, queuing candidate");
-                }
-            } catch (error) {
-                console.error("❌ Error handling ICE candidate:", error);
-            }
-        }
-
-        // Utility function to escape HTML
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Cleanup on page unload
-        window.addEventListener("beforeunload", () => {
-            if (ws) {
-                ws.close();
-            }
-            stopVideo();
-        });
-        
-
-        // Stop Video
         function stopVideo() {
             console.log("🛑 Stopping video...");
             
@@ -932,35 +816,22 @@
                 console.log("🔌 Closed peer connection");
             }
 
-            if (remoteStream) {
-                remoteStream = null;
-            }
-
             remoteVideo.srcObject = null;
+            iceCandidateQueue = [];
         }
 
-        // Create Peer Connection
-        async function createPeerConnection() {
+        function createPeerConnection() {
             console.log("🔗 Creating peer connection with TURN servers...");
             peerConnection = new RTCPeerConnection(iceServers);
 
-            // Handle incoming tracks (Admin receives User's video)
             peerConnection.ontrack = (event) => {
                 console.log("📹 Received remote track:", event.track.kind);
-                
-                if (!remoteStream) {
-                    remoteStream = new MediaStream();
-                }
-                
-                remoteStream.addTrack(event.track);
-                remoteVideo.srcObject = remoteStream;
+                remoteVideo.srcObject = event.streams[0];
                 noVideoMessage.classList.add("hidden");
                 updateConnectionStatus("connected");
-                
                 console.log("✅ Video stream connected successfully");
             };
 
-            // Handle ICE candidates
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
                     console.log("🧊 Sending ICE candidate:", event.candidate.type);
@@ -974,7 +845,6 @@
                 }
             };
 
-            // Monitor connection state
             peerConnection.onconnectionstatechange = () => {
                 console.log("🔗 Connection state:", peerConnection.connectionState);
                 
@@ -982,15 +852,13 @@
                     updateConnectionStatus("connected");
                 } else if (peerConnection.connectionState === "failed") {
                     updateConnectionStatus("failed");
-                    console.error("❌ Connection failed - retrying...");
-                    // Attempt to restart ICE
+                    console.error("❌ Connection failed - attempting to restart ICE...");
                     peerConnection.restartIce();
                 } else if (peerConnection.connectionState === "disconnected") {
                     console.log("⚠️ Connection disconnected");
                 }
             };
 
-            // Monitor ICE connection state
             peerConnection.oniceconnectionstatechange = () => {
                 console.log("🧊 ICE connection state:", peerConnection.iceConnectionState);
                 
@@ -1000,7 +868,6 @@
                 }
             };
 
-            // Monitor gathering state
             peerConnection.onicegatheringstatechange = () => {
                 console.log("🧊 ICE gathering state:", peerConnection.iceGatheringState);
             };
@@ -1008,69 +875,84 @@
             return peerConnection;
         }
 
-        // Handle Offer (Admin receives from User)
         async function handleOffer(offer, from) {
-            console.log("Received offer from user");
+            console.log("📥 Received offer from user");
             
             if (currentUser.type !== "admin") return;
 
             try {
                 createPeerConnection();
+                
+                console.log("📝 Setting remote description...");
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
 
+                while (iceCandidateQueue.length > 0) {
+                    const candidate = iceCandidateQueue.shift();
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log("✅ Added queued ICE candidate");
+                }
+
+                console.log("📝 Creating answer...");
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
 
-                console.log("Sending answer to user");
-
+                console.log("📤 Sending answer to user");
                 ws.send(JSON.stringify({
                     type: "answer",
                     answer: answer,
                     to: from
                 }));
             } catch (error) {
-                console.error("Error handling offer:", error);
+                console.error("❌ Error handling offer:", error);
+                updateConnectionStatus("failed");
             }
         }
 
-        // Handle Answer (User receives from Admin)
         async function handleAnswer(answer) {
-            console.log("Received answer from admin");
+            console.log("📥 Received answer from admin");
             
             if (currentUser.type !== "user") return;
 
             try {
+                console.log("📝 Setting remote description...");
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                
+                while (iceCandidateQueue.length > 0) {
+                    const candidate = iceCandidateQueue.shift();
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log("✅ Added queued ICE candidate");
+                }
+                
+                console.log("✅ Answer processed successfully");
             } catch (error) {
-                console.error("Error handling answer:", error);
+                console.error("❌ Error handling answer:", error);
             }
         }
 
-        // Handle ICE Candidate
         async function handleIceCandidate(candidate) {
-            console.log("Received ICE candidate");
+            console.log("📥 Received ICE candidate");
             
             try {
-                if (peerConnection) {
+                if (peerConnection && peerConnection.remoteDescription) {
                     await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log("✅ ICE candidate added successfully");
+                } else {
+                    console.log("⚠️ Peer connection not ready, queueing candidate");
+                    iceCandidateQueue.push(candidate);
                 }
             } catch (error) {
-                console.error("Error handling ICE candidate:", error);
+                console.error("❌ Error handling ICE candidate:", error);
             }
         }
 
-        // Utility function to escape HTML
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // Cleanup on page unload
         window.addEventListener("beforeunload", () => {
-            if (ws) {
-                ws.close();
-            }
+            if (ws) ws.close();
             stopVideo();
         });
     </script>

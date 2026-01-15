@@ -6,33 +6,25 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from the current directory
 app.use(express.static(path.join(__dirname)));
 
-// Serve index.html for root route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Create HTTP server
 const server = http.createServer(app);
-
-// Create WebSocket server
 const wss = new WebSocket.Server({ server });
 
-// Store connected clients
 const clients = new Map();
 let adminClient = null;
 const userQueue = [];
 const activeChats = new Map();
 const chatHistory = new Map();
 
-// Generate unique ID
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
-// Send to specific client
 function sendToClient(clientId, message) {
     const client = clients.get(clientId);
     if (client && client.ws.readyState === WebSocket.OPEN) {
@@ -40,7 +32,6 @@ function sendToClient(clientId, message) {
     }
 }
 
-// Update user list for admin
 function updateUserList() {
     if (!adminClient) return;
 
@@ -59,7 +50,6 @@ function updateUserList() {
     });
 }
 
-// Update queue positions
 function updateQueue() {
     userQueue.forEach((userId, index) => {
         sendToClient(userId, {
@@ -69,7 +59,6 @@ function updateQueue() {
     });
 }
 
-// WebSocket connection handler
 wss.on('connection', (ws) => {
     let clientId = null;
 
@@ -97,29 +86,23 @@ wss.on('connection', (ws) => {
             case 'join':
                 handleJoin(ws, data);
                 break;
-
             case 'selectUser':
                 handleSelectUser(data);
                 break;
-
             case 'message':
                 handleChatMessage(data);
                 break;
-
             case 'endChat':
                 handleEndChat(data);
                 break;
-
             case 'offer':
             case 'answer':
             case 'iceCandidate':
                 handleWebRTC(data);
                 break;
-
             case 'requestVideo':
                 handleVideoRequest(data);
                 break;
-
             default:
                 console.log('Unknown message type:', data.type);
         }
@@ -137,7 +120,6 @@ wss.on('connection', (ws) => {
 
         clients.set(clientId, client);
 
-        // Send welcome message
         ws.send(JSON.stringify({
             type: 'welcome',
             userId: clientId
@@ -158,7 +140,6 @@ wss.on('connection', (ws) => {
         } else {
             console.log(`User ${data.username} connected`);
             
-            // Add to queue if admin exists
             if (adminClient) {
                 userQueue.push(clientId);
                 updateQueue();
@@ -188,21 +169,17 @@ wss.on('connection', (ws) => {
             return;
         }
 
-        // Remove from queue
         const queueIndex = userQueue.indexOf(userId);
         if (queueIndex > -1) {
             userQueue.splice(queueIndex, 1);
         }
 
-        // Create active chat
         activeChats.set(userId, adminClient.id);
         activeChats.set(adminClient.id, userId);
 
-        // Get chat history if exists
         const chatKey = `${adminClient.id}-${userId}`;
         const messages = chatHistory.get(chatKey) || [];
 
-        // Notify both parties
         sendToClient(adminClient.id, {
             type: 'chatStarted',
             with: {
@@ -223,7 +200,6 @@ wss.on('connection', (ws) => {
             messages: messages
         });
 
-        // Update queue positions for remaining users
         updateQueue();
         updateUserList();
     }
@@ -243,7 +219,6 @@ wss.on('connection', (ws) => {
             timestamp: new Date().toISOString()
         };
 
-        // Store in chat history
         let chatKey;
         if (fromClient.type === 'admin') {
             chatKey = `${clientId}-${toId}`;
@@ -256,7 +231,6 @@ wss.on('connection', (ws) => {
         }
         chatHistory.get(chatKey).push(message);
 
-        // Send to recipient
         sendToClient(toId, {
             type: 'message',
             from: fromClient.username,
@@ -276,16 +250,13 @@ wss.on('connection', (ws) => {
             otherUserId = activeChats.get(clientId);
         }
 
-        // Remove from active chats
         activeChats.delete(clientId);
         activeChats.delete(otherUserId);
 
-        // Notify other user
         if (otherUserId) {
             const otherClient = clients.get(otherUserId);
             if (otherClient) {
                 if (otherClient.type === 'user') {
-                    // Put user back in queue
                     userQueue.push(otherUserId);
                     sendToClient(otherUserId, {
                         type: 'chatEnded',
@@ -343,10 +314,8 @@ function handleDisconnect(clientId) {
     console.log(`${client.username} disconnected`);
 
     if (client.type === 'admin') {
-        // Admin disconnected
         adminClient = null;
 
-        // End all active chats
         activeChats.forEach((partnerId, userId) => {
             if (userId !== clientId) {
                 sendToClient(userId, {
@@ -358,7 +327,6 @@ function handleDisconnect(clientId) {
         activeChats.clear();
         userQueue.length = 0;
 
-        // Notify all users
         clients.forEach((c, id) => {
             if (c.type === 'user' && id !== clientId) {
                 sendToClient(id, {
@@ -368,14 +336,12 @@ function handleDisconnect(clientId) {
             }
         });
     } else {
-        // User disconnected
         const queueIndex = userQueue.indexOf(clientId);
         if (queueIndex > -1) {
             userQueue.splice(queueIndex, 1);
             updateQueue();
         }
 
-        // If in active chat, notify admin
         const partnerId = activeChats.get(clientId);
         if (partnerId) {
             activeChats.delete(clientId);
@@ -391,9 +357,8 @@ function handleDisconnect(clientId) {
     clients.delete(clientId);
 }
 
-// Start server
 server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`WebSocket server is ready`);
-    console.log(`Access the app at http://localhost:${PORT}`);
+    console.log(`✅ Server is running on port ${PORT}`);
+    console.log(`✅ WebSocket server is ready`);
+    console.log(`🌐 Access the app at http://localhost:${PORT}`);
 });

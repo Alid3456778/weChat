@@ -1,7 +1,7 @@
 {
   "name": "video-chat-app",
   "version": "1.0.0",
-  "description": "Admin-User Video Chat Application",
+  "description": "Admin-User Video Chat Application with WebRTC",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,7 +11,9 @@
     "video",
     "chat",
     "webrtc",
-    "websocket"
+    "websocket",
+    "turn",
+    "stun"
   ],
   "author": "",
   "license": "ISC",
