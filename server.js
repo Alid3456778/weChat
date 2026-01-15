@@ -29,10 +29,10 @@ function generateId() {
 function sendToClient(clientId, message) {
     const client = clients.get(clientId);
     if (client && client.ws.readyState === WebSocket.OPEN) {
-        // Priority messages (chat) sent immediately
+        // Priority messages (chat, chatStarted) sent immediately
         if (message.priority === true) {
             client.ws.send(JSON.stringify(message));
-            console.log(`💬 Priority message sent to ${clientId}`);
+            console.log(`💬 Priority message sent to ${clientId}: ${message.type}`);
         } else {
             // Low priority messages (video frames) queued
             if (!messageQueues.has(clientId)) {
@@ -40,17 +40,19 @@ function sendToClient(clientId, message) {
             }
             const queue = messageQueues.get(clientId);
             
-            // Keep queue small (max 3 frames)
-            if (queue.length >= 3) {
-                queue.shift(); // Remove oldest frame
+            // HARD LIMIT: Only 1 frame in queue
+            if (queue.length >= 1) {
+                queue.shift(); // Remove oldest frame immediately
             }
             
             queue.push(message);
         }
+    } else {
+        console.warn(`⚠️ Cannot send to ${clientId}: WebSocket not open`);
     }
 }
 
-// Process message queues for all clients
+// Process message queues FAST for all clients
 function processMessageQueues() {
     messageQueues.forEach((queue, clientId) => {
         const client = clients.get(clientId);
@@ -61,8 +63,8 @@ function processMessageQueues() {
     });
 }
 
-// Process queues every 100ms
-setInterval(processMessageQueues, 100);
+// Process queues every 50ms (faster than before)
+setInterval(processMessageQueues, 50);
 
 function updateUserList() {
     if (!adminClient) return;
@@ -136,6 +138,9 @@ wss.on('connection', (ws) => {
             case 'videoFrame':
                 handleVideoFrame(data);
                 break;
+            case 'audioChunk':
+                handleAudioChunk(data);
+                break;
             default:
                 console.log('Unknown message type:', data.type);
         }
@@ -188,16 +193,22 @@ wss.on('connection', (ws) => {
 
     function handleSelectUser(data) {
         if (!adminClient || clients.get(clientId)?.type !== 'admin') {
+            console.log('⚠️ Non-admin tried to select user');
             return;
         }
 
         const userId = data.userId;
         const user = clients.get(userId);
 
+        console.log(`👨‍💼 Admin selecting user: ${userId}`);
+        console.log(`👤 User found:`, user ? user.username : 'NOT FOUND');
+
         if (!user || user.type !== 'user') {
+            console.error(`❌ User not found: ${userId}`);
             sendToClient(clientId, {
                 type: 'error',
-                message: 'User not found'
+                message: 'User not found',
+                priority: true
             });
             return;
         }
@@ -205,14 +216,18 @@ wss.on('connection', (ws) => {
         const queueIndex = userQueue.indexOf(userId);
         if (queueIndex > -1) {
             userQueue.splice(queueIndex, 1);
+            console.log(`✅ Removed user from queue position ${queueIndex}`);
         }
 
         activeChats.set(userId, adminClient.id);
         activeChats.set(adminClient.id, userId);
+        console.log(`✅ Active chat created: Admin ↔ ${user.username}`);
 
         const chatKey = `${adminClient.id}-${userId}`;
         const messages = chatHistory.get(chatKey) || [];
 
+        // Send to ADMIN
+        console.log(`📤 Sending chatStarted to admin`);
         sendToClient(adminClient.id, {
             type: 'chatStarted',
             with: {
@@ -220,9 +235,12 @@ wss.on('connection', (ws) => {
                 username: user.username,
                 type: user.type
             },
-            messages: messages
+            messages: messages,
+            priority: true
         });
 
+        // Send to USER
+        console.log(`📤 Sending chatStarted to user: ${user.username}`);
         sendToClient(userId, {
             type: 'chatStarted',
             with: {
@@ -230,11 +248,13 @@ wss.on('connection', (ws) => {
                 username: adminClient.username,
                 type: adminClient.type
             },
-            messages: messages
+            messages: messages,
+            priority: true
         });
 
         updateQueue();
         updateUserList();
+        console.log(`✅ Chat started successfully`);
     }
 
     function handleChatMessage(data) {
@@ -358,6 +378,28 @@ wss.on('connection', (ws) => {
                 from: clientId,
                 priority: false // LOW PRIORITY - queued
             });
+        }
+    }
+
+    function handleAudioChunk(data) {
+        const fromClient = clients.get(clientId);
+        if (!fromClient || fromClient.type !== 'user') {
+            return;
+        }
+
+        const toId = data.to;
+        
+        // Forward the audio to admin (medium priority - faster than video)
+        if (toId && clients.has(toId)) {
+            const client = clients.get(toId);
+            if (client && client.ws.readyState === WebSocket.OPEN) {
+                // Send audio directly (bypass queue for better audio quality)
+                client.ws.send(JSON.stringify({
+                    type: 'audioChunk',
+                    audio: data.audio,
+                    from: clientId
+                }));
+            }
         }
     }
 });
