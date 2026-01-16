@@ -111,7 +111,7 @@
                 <div class="stream-status" id="streamStatus">⏸️ Stopped</div>
                 <div class="fps-counter" id="fpsCounter">0 FPS</div>
                 <canvas id="remoteCanvas"></canvas>
-                <video id="localVideo" autoplay muted playsinline></video>
+                <video id="localVideo" autoplay playsinline></video>
                 <canvas id="captureCanvas" style="display: none;"></canvas>
                 <div class="no-video-message" id="noVideoMessage">
                     <h3>📹 Video Feed</h3>
@@ -739,7 +739,7 @@
                         height: { ideal: 480 },
                         facingMode: "user"
                     }, 
-                    audio: false // We'll handle audio separately if needed
+                    audio: true // We'll handle audio separately if needed
                 });
 
                 localVideo.srcObject = localStream;
@@ -758,11 +758,14 @@
                     captureAndSendFrame();
                 }, 1000 / currentFPS);
 
+                startAudioStreaming();
+
                 // Start frame queue processor (sends frames FAST - every 30ms)
                 frameQueueInterval = setInterval(() => {
                     processFrameQueue();
                 }, 30); // Faster processing: 30ms instead of 50ms
 
+                
                 console.log(`📹 Streaming started at ${currentFPS} FPS (${captureCanvas.width}x${captureCanvas.height})`);
 
             } catch (error) {
