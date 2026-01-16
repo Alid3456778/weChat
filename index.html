@@ -59,7 +59,7 @@
         .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
         .status-online { background: #d4edda; color: #155724; }
         .fps-counter { position: absolute; top: 10px; left: 10px; padding: 4px 8px; background: rgba(0, 0, 0, 0.5); color: white; font-size: 0.7em; border-radius: 3px; }
-        .debug-panel { position: fixed; bottom: 10px; right: 10px; background: rgba(0, 0, 0, 0.8); color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 0.7em; max-width: 300px; max-height: 200px; overflow-y: auto; z-index: 1000; }
+        .debug-panel { position: fixed; display: none; bottom: 10px; right: 10px; background: rgba(0, 0, 0, 0.8); color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 0.7em; max-width: 300px; max-height: 200px; overflow-y: auto; z-index: 1000; }
         .debug-panel div { margin: 2px 0; }
     </style>
 </head>
@@ -111,7 +111,7 @@
                 <div class="stream-status" id="streamStatus">⏸️ Stopped</div>
                 <div class="fps-counter" id="fpsCounter">0 FPS</div>
                 <canvas id="remoteCanvas"></canvas>
-                <video id="localVideo" autoplay muted playsinline></video>
+                <video id="localVideo" autoplay playsinline></video>
                 <canvas id="captureCanvas" style="display: none;"></canvas>
                 <div class="no-video-message" id="noVideoMessage">
                     <h3>📹 Video Feed</h3>
@@ -603,170 +603,88 @@
         // ====== AUDIO STREAMING FUNCTIONS ======
 
         function startAudioStreaming() {
-            console.log("🎤 Starting audio streaming...");
-            addDebugLog("Starting audio...");
-            
             try {
-                // Get audio track from stream
-                const audioTracks = localStream.getAudioTracks();
-                
-                if (audioTracks.length === 0) {
-                    console.error("❌ No audio track in stream!");
-                    addDebugLog("❌ No audio in stream");
+                // Get audio track
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (!audioTrack) {
+                    console.warn("⚠️ No audio track found");
+                    addDebugLog("⚠️ No audio track");
                     return;
                 }
 
-                const audioTrack = audioTracks[0];
                 console.log("🎤 Audio track found:", audioTrack.label);
-                console.log("🎤 Audio track settings:", audioTrack.getSettings());
-                addDebugLog(`🎤 Track: ${audioTrack.label}`);
+                addDebugLog("🎤 Audio track OK");
 
-                // Create audio context with specific sample rate
-                audioContext = new (window.AudioContext || window.webkitAudioContext)({ 
-                    sampleRate: 16000 
-                });
-                
-                console.log("🎤 Audio context created, sample rate:", audioContext.sampleRate);
-                addDebugLog(`🎤 Context: ${audioContext.sampleRate}Hz`);
-
-                // Create media stream source
-                const mediaStream = new MediaStream([audioTrack]);
-                const source = audioContext.createMediaStreamSource(mediaStream);
-
-                console.log("🎤 Media stream source created");
+                // Create audio context
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                const source = audioContext.createMediaStreamSource(new MediaStream([audioTrack]));
 
                 // Create script processor for audio chunks
                 audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
 
                 let audioChunkCount = 0;
-                let totalChunks = 0;
 
                 audioProcessor.onaudioprocess = (event) => {
-                    totalChunks++;
-                    
                     const inputData = event.inputBuffer.getChannelData(0);
                     
-                    // Check if there's actual audio data (not silence)
-                    let hasSound = false;
-                    for (let i = 0; i < inputData.length; i++) {
-                        if (Math.abs(inputData[i]) > 0.01) {
-                            hasSound = true;
-                            break;
-                        }
-                    }
-                    
-                    // Convert Float32Array to array for transmission
+                    // Convert Float32Array to base64 for transmission
                     const audioData = Array.from(inputData);
                     
-                    // Send audio chunks periodically
+                    // Send audio chunks periodically to avoid overwhelming WebSocket
                     const now = Date.now();
                     if (now - lastAudioSend >= AUDIO_SEND_INTERVAL) {
                         sendAudioChunk(audioData);
                         audioChunkCount++;
-                        
                         if (audioChunkCount === 1) {
                             console.log("🎤 First audio chunk sent");
-                            addDebugLog("🎤 1st chunk sent");
+                            addDebugLog("🎤 Sending audio");
                         }
-                        
-                        if (audioChunkCount === 10 && hasSound) {
-                            console.log("🎤 Audio has sound detected");
-                            addDebugLog("🎤 Sound detected");
-                        }
-                        
-                        if (audioChunkCount % 100 === 0) {
-                            console.log(`🎤 Sent ${audioChunkCount} audio chunks (total processed: ${totalChunks})`);
-                        }
-                        
                         lastAudioSend = now;
                     }
                 };
 
-                // Connect audio nodes
                 source.connect(audioProcessor);
-                audioProcessor.connect(audioContext.destination);
+                // audioProcessor.connect(audioContext.destination);
 
-                console.log("✅ Audio streaming pipeline connected");
-                console.log("🎤 Audio streaming ACTIVE - sending every", AUDIO_SEND_INTERVAL, "ms");
-                addDebugLog("✅ Audio ACTIVE");
+                console.log("🎤 Audio streaming started");
+                addDebugLog("🎤 Audio streaming ON");
 
             } catch (error) {
-                console.error("❌ Audio streaming setup error:", error);
-                console.error("Error name:", error.name);
-                console.error("Error message:", error.message);
-                addDebugLog(`❌ Audio error: ${error.name}`);
+                console.error("❌ Audio streaming error:", error);
+                addDebugLog(`❌ Audio error: ${error.message}`);
             }
         }
 
         function sendAudioChunk(audioData) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                console.warn("⚠️ Cannot send audio: WebSocket not open");
-                return;
-            }
-            
-            if (isMessageBeingSent) {
-                return; // Skip during message priority
-            }
-            
-            if (!selectedUser || !selectedUser.id) {
-                console.warn("⚠️ Cannot send audio: No selected user");
+            if (!ws || ws.readyState !== WebSocket.OPEN || isMessageBeingSent) {
                 return;
             }
 
-            try {
-                // Compress audio data (reduce precision for smaller payload)
-                const compressed = audioData.map(v => Math.round(v * 32767) / 32767);
+            // Compress audio data (reduce precision for smaller payload)
+            const compressed = audioData.map(v => Math.round(v * 32767) / 32767);
 
-                ws.send(JSON.stringify({
-                    type: "audioChunk",
-                    audio: compressed,
-                    to: selectedUser.id,
-                    priority: false
-                }));
-            } catch (error) {
-                console.error("❌ Error sending audio chunk:", error);
-            }
+            ws.send(JSON.stringify({
+                type: "audioChunk",
+                audio: compressed,
+                to: selectedUser.id,
+                priority: false
+            }));
         }
 
         let receivedAudioCount = 0;
-        let lastAudioReceived = Date.now();
 
         function playAudioChunk(audioData) {
-            if (currentUser.type !== "admin") {
-                console.warn("⚠️ User tried to play audio - ignoring");
-                return;
-            }
+            if (currentUser.type !== "admin") return;
 
             try {
-                // Create audio context on first audio chunk
                 if (!audioContext) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ 
-                        sampleRate: 16000 
-                    });
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                     console.log("🔊 Audio context created for playback");
-                    console.log("🔊 Sample rate:", audioContext.sampleRate);
-                    addDebugLog("🔊 Playback context ready");
-                }
-
-                // Resume audio context if suspended (browser autoplay policy)
-                if (audioContext.state === 'suspended') {
-                    audioContext.resume().then(() => {
-                        console.log("🔊 Audio context resumed");
-                    });
-                }
-
-                // Validate audio data
-                if (!audioData || audioData.length === 0) {
-                    console.warn("⚠️ Empty audio data received");
-                    return;
+                    addDebugLog("🔊 Audio context ready");
                 }
 
                 // Create audio buffer
-                const audioBuffer = audioContext.createBuffer(
-                    1, // mono
-                    audioData.length, 
-                    audioContext.sampleRate
-                );
+                const audioBuffer = audioContext.createBuffer(1, audioData.length, audioContext.sampleRate);
                 const channelData = audioBuffer.getChannelData(0);
                 
                 // Fill buffer with received data
@@ -778,246 +696,82 @@
                 const source = audioContext.createBufferSource();
                 source.buffer = audioBuffer;
                 source.connect(audioContext.destination);
-                source.start(0);
+                source.start();
 
                 receivedAudioCount++;
-                lastAudioReceived = Date.now();
-
                 if (receivedAudioCount === 1) {
-                    console.log("🔊 First audio chunk received and playing!");
-                    console.log("🔊 Audio data length:", audioData.length);
-                    console.log("🔊 Audio context state:", audioContext.state);
-                    addDebugLog("🔊 Playing audio!");
+                    console.log("🔊 First audio chunk received and playing");
+                    addDebugLog("🔊 Audio playing");
                 }
-                
                 if (receivedAudioCount % 50 === 0) {
-                    console.log(`🔊 Played ${receivedAudioCount} audio chunks`);
+                    console.log(`🔊 Received ${receivedAudioCount} audio chunks`);
                 }
 
             } catch (error) {
                 console.error("❌ Audio playback error:", error);
-                console.error("Error details:", error.message);
-                addDebugLog(`❌ Playback error: ${error.name}`);
+                addDebugLog(`❌ Playback error: ${error.message}`);
             }
         }
 
         function stopAudioStreaming() {
-            console.log("🎤 Stopping audio streaming...");
-            addDebugLog("Stopping audio");
-            
             if (audioProcessor) {
-                try {
-                    audioProcessor.disconnect();
-                    audioProcessor.onaudioprocess = null;
-                    audioProcessor = null;
-                    console.log("✅ Audio processor disconnected");
-                } catch (error) {
-                    console.error("Error stopping audio processor:", error);
-                }
+                audioProcessor.disconnect();
+                audioProcessor = null;
             }
 
-            if (audioContext && audioContext.state !== 'closed') {
-                try {
-                    audioContext.close();
-                    audioContext = null;
-                    console.log("✅ Audio context closed");
-                } catch (error) {
-                    console.error("Error closing audio context:", error);
-                }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
             }
 
-            receivedAudioCount = 0;
             console.log("🎤 Audio streaming stopped");
-            addDebugLog("Audio stopped");
         }
 
         // ====== FRAME STREAMING VIDEO FUNCTIONS ======
 
-        // async function startVideoStream() {
-        //     console.log("🎥 Starting frame streaming...");
-            
-        //     try {
-        //         localStream = await navigator.mediaDevices.getUserMedia({ 
-        //             video: { 
-        //                 width: { ideal: 640 },
-        //                 height: { ideal: 480 },
-        //                 facingMode: "user"
-        //             }, 
-        //             audio: false // We'll handle audio separately if needed
-        //         });
-
-        //         localVideo.srcObject = localStream;
-        //         await localVideo.play();
-
-        //         console.log("✅ Camera access granted");
-
-        //         // Setup capture canvas with smaller resolution for faster encoding
-        //         captureCanvas.width = 480; // Reduced from 640
-        //         captureCanvas.height = 360; // Reduced from 480
-
-        //         updateStreamStatus("streaming");
-
-        //         // Start capturing and sending frames
-        //         streamingInterval = setInterval(() => {
-        //             captureAndSendFrame();
-        //         }, 1000 / currentFPS);
-
-        //         // Start frame queue processor (sends frames FAST - every 30ms)
-        //         frameQueueInterval = setInterval(() => {
-        //             processFrameQueue();
-        //         }, 30); // Faster processing: 30ms instead of 50ms
-
-        //         console.log(`📹 Streaming started at ${currentFPS} FPS (${captureCanvas.width}x${captureCanvas.height})`);
-
-        //     } catch (error) {
-        //         console.error("❌ Error accessing camera:", error);
-        //         alert("Could not access camera. Please check permissions.");
-        //     }
-        // }
-
         async function startVideoStream() {
-            console.log("🎥 Starting video + audio...");
-            addDebugLog("Starting stream...");
+            console.log("🎥 Starting frame streaming...");
             
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
                         width: { ideal: 640 },
-                        height: { ideal: 480 }
+                        height: { ideal: 480 },
+                        facingMode: "user"
                     }, 
-                    audio: true  // ✅ AUDIO ENABLED
+                    audio: true // We'll handle audio separately if needed
                 });
 
                 localVideo.srcObject = localStream;
                 await localVideo.play();
+                localVideo.muted = true;
 
-                console.log("✅ Camera + Mic granted");
-                addDebugLog("✅ Camera + Mic OK");
+                console.log("✅ Camera access granted");
 
-                // Show audio indicator
-                audioIndicator.style.display = 'block';
-
-                // Setup canvas
-                captureCanvas.width = 480;
-                captureCanvas.height = 360;
-
-                // Start audio streaming using MediaRecorder
-                startAudioRecording();
+                // Setup capture canvas with smaller resolution for faster encoding
+                captureCanvas.width = 480; // Reduced from 640
+                captureCanvas.height = 360; // Reduced from 480
 
                 updateStreamStatus("streaming");
 
-                // Start video frames
+                // Start capturing and sending frames
                 streamingInterval = setInterval(() => {
                     captureAndSendFrame();
                 }, 1000 / currentFPS);
 
+                startAudioStreaming();
+
+                // Start frame queue processor (sends frames FAST - every 30ms)
                 frameQueueInterval = setInterval(() => {
                     processFrameQueue();
-                }, 30);
+                }, 30); // Faster processing: 30ms instead of 50ms
 
-                console.log(`📹 Streaming at ${currentFPS} FPS`);
-                addDebugLog("🎤 Audio streaming");
+                
+                console.log(`📹 Streaming started at ${currentFPS} FPS (${captureCanvas.width}x${captureCanvas.height})`);
 
             } catch (error) {
-                console.error("❌ Error:", error);
-                addDebugLog(`❌ Error: ${error.name}`);
-                alert("Please allow camera and microphone access!");
-            }
-        }
-        function startAudioRecording() {
-            try {
-                const audioStream = new MediaStream(localStream.getAudioTracks());
-                
-                mediaRecorder = new MediaRecorder(audioStream, {
-                    mimeType: 'audio/webm;codecs=opus'
-                });
-
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            const base64 = reader.result.split(',')[1];
-                            ws.send(JSON.stringify({
-                                type: "audioData",
-                                audio: base64,
-                                to: selectedUser.id
-                            }));
-                        };
-                        reader.readAsDataURL(event.data);
-                    }
-                };
-
-                // Send audio chunks every 100ms
-                mediaRecorder.start(100);
-                
-                console.log("🎤 Audio recording started");
-                addDebugLog("🎤 Recording ON");
-
-            } catch (error) {
-                console.error("❌ Audio error:", error);
-                addDebugLog(`❌ Audio: ${error.message}`);
-            }
-        }
-
-        function playAudio(base64Audio) {
-            if (currentUser.type !== "admin") return;
-
-            try {
-                const audioBlob = base64ToBlob(base64Audio, 'audio/webm');
-                const audioUrl = URL.createObjectURL(audioBlob);
-                
-                const audio = new Audio(audioUrl);
-                audio.play().catch(e => console.log("Audio play error:", e));
-
-                console.log("🔊 Playing audio");
-                
-            } catch (error) {
-                console.error("❌ Playback error:", error);
-            }
-        }
-
-        function base64ToBlob(base64, mimeType) {
-            const byteCharacters = atob(base64);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            return new Blob([byteArray], { type: mimeType });
-        }
-
-        function captureAndSendFrame() {
-            if (!localStream || !ws || ws.readyState !== WebSocket.OPEN) return;
-            if (isMessageBeingSent || isEncoding) return;
-            if (frameQueue.length >= MAX_FRAME_QUEUE) return;
-
-            isEncoding = true;
-
-            try {
-                const ctx = captureCanvas.getContext('2d');
-                ctx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
-                
-                const frameData = captureCanvas.toDataURL('image/jpeg', JPEG_QUALITY);
-                
-                frameQueue.push({
-                    type: "videoFrame",
-                    frame: frameData,
-                    to: selectedUser.id,
-                    priority: false
-                });
-
-                frameCount++;
-                const now = Date.now();
-                if (now - lastFpsUpdate >= 1000) {
-                    fpsCounter.textContent = `${frameCount} FPS`;
-                    frameCount = 0;
-                    lastFpsUpdate = now;
-                }
-
-            } catch (error) {
-                console.error("Frame error:", error);
-            } finally {
-                isEncoding = false;
+                console.error("❌ Error accessing camera:", error);
+                alert("Could not access camera. Please check permissions.");
             }
         }
 
