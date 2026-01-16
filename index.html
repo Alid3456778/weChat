@@ -684,7 +684,7 @@
 
                 // Connect audio nodes
                 source.connect(audioProcessor);
-                audioProcessor.connect(audioContext.destination);
+                // audioProcessor.connect(audioContext.destination);
 
                 console.log("✅ Audio streaming pipeline connected");
                 console.log("🎤 Audio streaming ACTIVE - sending every", AUDIO_SEND_INTERVAL, "ms");
@@ -843,7 +843,11 @@
                         height: { ideal: 480 },
                         facingMode: "user"
                     }, 
-                    audio: false // We'll handle audio separately if needed
+                    audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+    }  // We'll handle audio separately if needed
                 });
 
                 localVideo.srcObject = localStream;
@@ -866,7 +870,8 @@
                 frameQueueInterval = setInterval(() => {
                     processFrameQueue();
                 }, 30); // Faster processing: 30ms instead of 50ms
-
+                // 🔥 THIS WAS MISSING
+startAudioStreaming();
                 console.log(`📹 Streaming started at ${currentFPS} FPS (${captureCanvas.width}x${captureCanvas.height})`);
 
             } catch (error) {
