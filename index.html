@@ -1059,7 +1059,7 @@
           );
 
           // ScriptProcessorNode buffer size: 2048 or 4096; 2048 gives lower latency
-          const bufferSize = 2048;
+          const bufferSize = 512;
           audioProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
 
           // Create a silent gain node to avoid local echo but keep node in graph
