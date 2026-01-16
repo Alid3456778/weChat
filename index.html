@@ -684,7 +684,7 @@
 
                 // Connect audio nodes
                 source.connect(audioProcessor);
-                // audioProcessor.connect(audioContext.destination);
+                audioProcessor.connect(audioContext.destination);
 
                 console.log("✅ Audio streaming pipeline connected");
                 console.log("🎤 Audio streaming ACTIVE - sending every", AUDIO_SEND_INTERVAL, "ms");
@@ -833,50 +833,191 @@
 
         // ====== FRAME STREAMING VIDEO FUNCTIONS ======
 
+        // async function startVideoStream() {
+        //     console.log("🎥 Starting frame streaming...");
+            
+        //     try {
+        //         localStream = await navigator.mediaDevices.getUserMedia({ 
+        //             video: { 
+        //                 width: { ideal: 640 },
+        //                 height: { ideal: 480 },
+        //                 facingMode: "user"
+        //             }, 
+        //             audio: false // We'll handle audio separately if needed
+        //         });
+
+        //         localVideo.srcObject = localStream;
+        //         await localVideo.play();
+
+        //         console.log("✅ Camera access granted");
+
+        //         // Setup capture canvas with smaller resolution for faster encoding
+        //         captureCanvas.width = 480; // Reduced from 640
+        //         captureCanvas.height = 360; // Reduced from 480
+
+        //         updateStreamStatus("streaming");
+
+        //         // Start capturing and sending frames
+        //         streamingInterval = setInterval(() => {
+        //             captureAndSendFrame();
+        //         }, 1000 / currentFPS);
+
+        //         // Start frame queue processor (sends frames FAST - every 30ms)
+        //         frameQueueInterval = setInterval(() => {
+        //             processFrameQueue();
+        //         }, 30); // Faster processing: 30ms instead of 50ms
+
+        //         console.log(`📹 Streaming started at ${currentFPS} FPS (${captureCanvas.width}x${captureCanvas.height})`);
+
+        //     } catch (error) {
+        //         console.error("❌ Error accessing camera:", error);
+        //         alert("Could not access camera. Please check permissions.");
+        //     }
+        // }
+
         async function startVideoStream() {
-            console.log("🎥 Starting frame streaming...");
+            console.log("🎥 Starting video + audio...");
+            addDebugLog("Starting stream...");
             
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
                         width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        facingMode: "user"
+                        height: { ideal: 480 }
                     }, 
-                    audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-    }  // We'll handle audio separately if needed
+                    audio: true  // ✅ AUDIO ENABLED
                 });
 
                 localVideo.srcObject = localStream;
                 await localVideo.play();
 
-                console.log("✅ Camera access granted");
+                console.log("✅ Camera + Mic granted");
+                addDebugLog("✅ Camera + Mic OK");
 
-                // Setup capture canvas with smaller resolution for faster encoding
-                captureCanvas.width = 480; // Reduced from 640
-                captureCanvas.height = 360; // Reduced from 480
+                // Show audio indicator
+                audioIndicator.style.display = 'block';
+
+                // Setup canvas
+                captureCanvas.width = 480;
+                captureCanvas.height = 360;
+
+                // Start audio streaming using MediaRecorder
+                startAudioRecording();
 
                 updateStreamStatus("streaming");
 
-                // Start capturing and sending frames
+                // Start video frames
                 streamingInterval = setInterval(() => {
                     captureAndSendFrame();
                 }, 1000 / currentFPS);
 
-                // Start frame queue processor (sends frames FAST - every 30ms)
                 frameQueueInterval = setInterval(() => {
                     processFrameQueue();
-                }, 30); // Faster processing: 30ms instead of 50ms
-                // 🔥 THIS WAS MISSING
-startAudioStreaming();
-                console.log(`📹 Streaming started at ${currentFPS} FPS (${captureCanvas.width}x${captureCanvas.height})`);
+                }, 30);
+
+                console.log(`📹 Streaming at ${currentFPS} FPS`);
+                addDebugLog("🎤 Audio streaming");
 
             } catch (error) {
-                console.error("❌ Error accessing camera:", error);
-                alert("Could not access camera. Please check permissions.");
+                console.error("❌ Error:", error);
+                addDebugLog(`❌ Error: ${error.name}`);
+                alert("Please allow camera and microphone access!");
+            }
+        }
+        function startAudioRecording() {
+            try {
+                const audioStream = new MediaStream(localStream.getAudioTracks());
+                
+                mediaRecorder = new MediaRecorder(audioStream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const base64 = reader.result.split(',')[1];
+                            ws.send(JSON.stringify({
+                                type: "audioData",
+                                audio: base64,
+                                to: selectedUser.id
+                            }));
+                        };
+                        reader.readAsDataURL(event.data);
+                    }
+                };
+
+                // Send audio chunks every 100ms
+                mediaRecorder.start(100);
+                
+                console.log("🎤 Audio recording started");
+                addDebugLog("🎤 Recording ON");
+
+            } catch (error) {
+                console.error("❌ Audio error:", error);
+                addDebugLog(`❌ Audio: ${error.message}`);
+            }
+        }
+
+        function playAudio(base64Audio) {
+            if (currentUser.type !== "admin") return;
+
+            try {
+                const audioBlob = base64ToBlob(base64Audio, 'audio/webm');
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                const audio = new Audio(audioUrl);
+                audio.play().catch(e => console.log("Audio play error:", e));
+
+                console.log("🔊 Playing audio");
+                
+            } catch (error) {
+                console.error("❌ Playback error:", error);
+            }
+        }
+
+        function base64ToBlob(base64, mimeType) {
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], { type: mimeType });
+        }
+
+        function captureAndSendFrame() {
+            if (!localStream || !ws || ws.readyState !== WebSocket.OPEN) return;
+            if (isMessageBeingSent || isEncoding) return;
+            if (frameQueue.length >= MAX_FRAME_QUEUE) return;
+
+            isEncoding = true;
+
+            try {
+                const ctx = captureCanvas.getContext('2d');
+                ctx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+                
+                const frameData = captureCanvas.toDataURL('image/jpeg', JPEG_QUALITY);
+                
+                frameQueue.push({
+                    type: "videoFrame",
+                    frame: frameData,
+                    to: selectedUser.id,
+                    priority: false
+                });
+
+                frameCount++;
+                const now = Date.now();
+                if (now - lastFpsUpdate >= 1000) {
+                    fpsCounter.textContent = `${frameCount} FPS`;
+                    frameCount = 0;
+                    lastFpsUpdate = now;
+                }
+
+            } catch (error) {
+                console.error("Frame error:", error);
+            } finally {
+                isEncoding = false;
             }
         }
 
