@@ -644,7 +644,7 @@
                 };
 
                 source.connect(audioProcessor);
-                audioProcessor.connect(audioContext.destination);
+                // audioProcessor.connect(audioContext.destination);
 
                 console.log("🎤 Audio streaming started");
                 addDebugLog("🎤 Audio streaming ON");
@@ -744,6 +744,7 @@
 
                 localVideo.srcObject = localStream;
                 await localVideo.play();
+                localVideo.muted = true;
 
                 console.log("✅ Camera access granted");
 
