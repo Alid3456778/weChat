@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin-User Video Chat</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .container {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        width: 95%;
+        max-width: 1200px;
+        overflow: hidden;
+      }
+      .login-screen {
+        padding: 60px 40px;
+        text-align: center;
+      }
+      .login-screen h1 {
+        color: #667eea;
+        margin-bottom: 30px;
+        font-size: 2.5em;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      .form-group label {
+        display: block;
+        text-align: left;
+        margin-bottom: 8px;
+        color: #333;
+        font-weight: 600;
+      }
+      .form-group input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border 0.3s;
+      }
+      .form-group input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      .radio-group {
+        display: flex;
+        gap: 20px;
+        justify-content: center;
+        margin: 20px 0;
+      }
+      .radio-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 10px 20px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        transition: all 0.3s;
+      }
+      .radio-group label:hover {
+        border-color: #667eea;
+        background: #f5f5ff;
+      }
+      .radio-group input[type="radio"]:checked + span {
+        color: #667eea;
+        font-weight: 600;
+      }
+      .btn {
+        padding: 14px 40px;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+      }
+      .btn-danger {
+        background: #ff4757;
+        color: white;
+      }
+      .btn-success {
+        background: #2ecc71;
+        color: white;
+      }
+      .lobby-screen {
+        display: flex;
+        height: 600px;
+      }
+      .sidebar {
+        width: 300px;
+        background: #f8f9fa;
+        border-right: 2px solid #e0e0e0;
+        display: flex;
+        flex-direction: column;
+      }
+      .sidebar-header {
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+      .sidebar-header h2 {
+        font-size: 1.3em;
+        margin-bottom: 5px;
+      }
+      .user-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+      }
+      .user-item {
+        padding: 15px;
+        margin-bottom: 10px;
+        background: white;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s;
+        border: 2px solid transparent;
+      }
+      .user-item:hover {
+        border-color: #667eea;
+        transform: translateX(5px);
+      }
+      .user-item.online {
+        border-left: 4px solid #2ecc71;
+      }
+      .waiting-message {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: #666;
+        padding: 40px;
+        text-align: center;
+      }
+      .waiting-message h2 {
+        color: #667eea;
+        margin-bottom: 20px;
+      }
+      .queue-info {
+        background: #fff3cd;
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 20px;
+      }
+      .chat-screen {
+        display: flex;
+        height: 600px;
+      }
+      .video-section {
+        width: 400px;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+      }
+      .no-video-message {
+        color: white;
+        text-align: center;
+        padding: 20px;
+      }
+      .stream-status {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border-radius: 5px;
+        font-size: 0.8em;
+        z-index: 10;
+      }
+      .stream-status.streaming {
+        background: rgba(40, 167, 69, 0.8);
+      }
+      .stream-status.stopped {
+        background: rgba(220, 53, 69, 0.8);
+      }
+      #remoteCanvas,
+      #localVideo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      #localVideo {
+        display: none;
+      }
+      .chat-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .chat-header {
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        background: #f8f9fa;
+      }
+      .message {
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+      }
+      .message.self {
+        align-items: flex-end;
+      }
+      .message-bubble {
+        max-width: 70%;
+        padding: 12px 16px;
+        border-radius: 12px;
+        word-wrap: break-word;
+      }
+      .message.self .message-bubble {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+      .message.other .message-bubble {
+        background: white;
+        color: #333;
+      }
+      .message-sender {
+        font-size: 0.8em;
+        color: #666;
+        margin-bottom: 4px;
+      }
+      .message-time {
+        font-size: 0.75em;
+        color: #999;
+        margin-top: 4px;
+      }
+      .message-input {
+        display: flex;
+        padding: 20px;
+        background: white;
+        border-top: 2px solid #e0e0e0;
+      }
+      .message-input input {
+        flex: 1;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+        margin-right: 10px;
+      }
+      .message-input input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8em;
+        font-weight: 600;
+      }
+      .status-online {
+        background: #d4edda;
+        color: #155724;
+      }
+      .fps-counter {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        padding: 4px 8px;
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        font-size: 0.7em;
+        border-radius: 3px;
+      }
+      .debug-panel {
+        position: fixed;
+        display: none;
+        bottom: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        color: #0f0;
+        padding: 10px;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 0.7em;
+        max-width: 300px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+      }
+      .debug-panel div {
+        margin: 2px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div id="loginScreen" class="login-screen">
+        <h1>🎥 Video Chat Platform</h1>
+        <div class="form-group">
+          <label>Your Name</label>
+          <input type="text" id="usernameInput" placeholder="Enter your name" />
+        </div>
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="userType" value="user" checked />
+            <span>User</span>
+          </label>
+          <label>
+            <input type="radio" name="userType" value="admin" />
+            <span>Admin</span>
+          </label>
+        </div>
+        <div class="form-group hidden" id="passwordGroup">
+          <label>Admin Password</label>
+          <input
+            type="password"
+            id="passwordInput"
+            placeholder="Enter admin password"
+          />
+        </div>
+        <button class="btn btn-primary" onclick="handleLogin()">Join</button>
+      </div>
+
+      <div id="lobbyScreen" class="lobby-screen hidden">
+        <div class="sidebar">
+          <div class="sidebar-header">
+            <h2 id="lobbyTitle">Lobby</h2>
+            <p id="lobbyUsername"></p>
+            <button
+              class="btn btn-danger"
+              style="margin-top: 10px; width: 100%"
+              onclick="logout()"
+            >
+              Logout
+            </button>
+          </div>
+          <div class="user-list" id="userList"></div>
+        </div>
+        <div class="waiting-message" id="waitingArea">
+          <h2>👋 Welcome!</h2>
+          <p id="waitingText">Waiting for connection...</p>
+          <div id="queueInfo" class="queue-info hidden">
+            <strong>Queue Position:</strong> <span id="queuePosition">-</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="chatScreen" class="chat-screen hidden">
+        <div class="video-section" id="videoSection">
+          <div class="stream-status" id="streamStatus">⏸️ Stopped</div>
+          <div class="fps-counter" id="fpsCounter">0 FPS</div>
+          <canvas id="remoteCanvas"></canvas>
+          <video id="localVideo" autoplay playsinline></video>
+          <canvas id="captureCanvas" style="display: none"></canvas>
+          <div class="no-video-message" id="noVideoMessage">
+            <h3>📹 Video Feed</h3>
+            <p>Waiting for user's video stream...</p>
+          </div>
+        </div>
+
+        <div class="chat-section">
+          <div class="chat-header">
+            <div>
+              <h3 id="chatWith">Chat</h3>
+              <span class="status-badge status-online">Online</span>
+            </div>
+            <button class="btn btn-danger" onclick="endChat()">End Chat</button>
+          </div>
+          <div class="messages" id="messages"></div>
+          <div class="message-input">
+            <input
+              type="text"
+              id="messageInput"
+              placeholder="Type a message..."
+              onkeypress="handleKeyPress(event)"
+            />
+            <button class="btn btn-success" onclick="sendMessage()">
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Debug Panel -->
+    <div class="debug-panel" id="debugPanel">
+      <div><strong>Debug Info:</strong></div>
+      <div id="debugInfo"></div>
+    </div>
+
+    <script>
+      const ADMIN_PASSWORD = "admin123";
+      const WS_URL = "wss://wechat-xhvo.onrender.com";
+      const BASE_FPS = 10; // Base frames per second
+      const MIN_FPS = 5; // Minimum FPS when congested
+      const MAX_FPS = 15; // Maximum FPS when clear
+      const JPEG_QUALITY = 0.6; // Reduced quality for faster encoding
+      const MESSAGE_PRIORITY_PAUSE = 300; // Longer pause for messages
+      const MAX_FRAME_QUEUE = 1; // HARD LIMIT: Only 1 frame queued
+
+      let ws = null;
+      let currentUser = { id: null, username: "", type: "user" };
+      let selectedUser = null;
+      let messages = [];
+      let localStream = null;
+      let streamingInterval = null;
+      let frameCount = 0;
+      let lastFpsUpdate = Date.now();
+      let isMessageBeingSent = false;
+      let frameQueue = [];
+      let frameQueueInterval = null;
+      let currentFPS = BASE_FPS; // Dynamic FPS
+      let lastFrameTime = Date.now();
+      let frameDropCount = 0;
+      let isEncoding = false; // Prevent concurrent encoding
+      let audioContext = null;
+      let audioProcessor = null;
+      let audioChunks = [];
+      let lastAudioSend = Date.now();
+      const AUDIO_SEND_INTERVAL = 100; // Send audio every 100ms
+
+      const loginScreen = document.getElementById("loginScreen");
+      const lobbyScreen = document.getElementById("lobbyScreen");
+      const chatScreen = document.getElementById("chatScreen");
+      const usernameInput = document.getElementById("usernameInput");
+      const passwordInput = document.getElementById("passwordInput");
+      const passwordGroup = document.getElementById("passwordGroup");
+      const userList = document.getElementById("userList");
+      const messagesDiv = document.getElementById("messages");
+      const messageInput = document.getElementById("messageInput");
+      const localVideo = document.getElementById("localVideo");
+      const captureCanvas = document.getElementById("captureCanvas");
+      const remoteCanvas = document.getElementById("remoteCanvas");
+      const videoSection = document.getElementById("videoSection");
+      const noVideoMessage = document.getElementById("noVideoMessage");
+      const streamStatus = document.getElementById("streamStatus");
+      const fpsCounter = document.getElementById("fpsCounter");
+
+      // Debug panel
+      const debugPanel = document.getElementById("debugPanel");
+      const debugInfo = document.getElementById("debugInfo");
+
+      function addDebugLog(message) {
+        const div = document.createElement("div");
+        div.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+        debugInfo.appendChild(div);
+
+        // Keep only last 10 messages
+        while (debugInfo.children.length > 10) {
+          debugInfo.removeChild(debugInfo.firstChild);
+        }
+
+        debugInfo.scrollTop = debugInfo.scrollHeight;
+      }
+
+      document.querySelectorAll('input[name="userType"]').forEach((radio) => {
+        radio.addEventListener("change", (e) => {
+          if (e.target.value === "admin") {
+            passwordGroup.classList.remove("hidden");
+          } else {
+            passwordGroup.classList.add("hidden");
+          }
+        });
+      });
+
+      function handleLogin() {
+        const username = usernameInput.value.trim();
+        const userType = document.querySelector(
+          'input[name="userType"]:checked'
+        ).value;
+        const password = passwordInput.value;
+
+        addDebugLog(`Login attempt: ${username} as ${userType}`);
+
+        if (!username) {
+          alert("Please enter your name");
+          return;
+        }
+
+        if (userType === "admin" && password !== ADMIN_PASSWORD) {
+          alert("Incorrect admin password");
+          addDebugLog("Admin password incorrect");
+          return;
+        }
+
+        currentUser.username = username;
+        currentUser.type = userType;
+
+        addDebugLog(`User set: ${username} (${userType})`);
+        connectWebSocket();
+      }
+
+      function connectWebSocket() {
+        addDebugLog("Connecting to WebSocket...");
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+          console.log("✅ Connected to server");
+          addDebugLog("✅ WebSocket connected");
+          ws.send(
+            JSON.stringify({
+              type: "join",
+              username: currentUser.username,
+              userType: currentUser.type,
+            })
+          );
+          addDebugLog(`Sent join request as ${currentUser.type}`);
+          showLobby();
+        };
+
+        ws.onmessage = (event) => {
+          if (typeof event.data === "string") {
+            const data = JSON.parse(event.data);
+            handleWebSocketMessage(data);
+          }
+        };
+
+        ws.onclose = () => {
+          console.log("❌ Disconnected from server");
+          addDebugLog("❌ WebSocket disconnected");
+        };
+
+        ws.onerror = (error) => {
+          console.error("❌ WebSocket error:", error);
+          addDebugLog("❌ WebSocket error");
+          alert("Connection error. Please check if the server is running.");
+        };
+      }
+
+      function handleWebSocketMessage(data) {
+        // console.log("📨 Received:", data.type, data);
+        addDebugLog(`📨 ${data.type}`);
+
+        switch (data.type) {
+          case "welcome":
+            currentUser.id = data.userId;
+            console.log("👤 User ID assigned:", currentUser.id);
+            addDebugLog(`ID: ${currentUser.id}`);
+            break;
+          case "userList":
+            console.log("📋 User list received:", data.users);
+            addDebugLog(`Users: ${data.users.length}`);
+            updateUserList(data.users);
+            break;
+          case "queuePosition":
+            console.log("📍 Queue position:", data.position);
+            addDebugLog(`Queue: ${data.position}`);
+            updateQueuePosition(data.position);
+            break;
+          case "chatStarted":
+            console.log("💬 Chat started with:", data.with);
+            addDebugLog(`Chat: ${data.with.username}`);
+            startChat(data.with, data.messages);
+            break;
+          case "message":
+            receiveMessage(data);
+            break;
+          case "chatEnded":
+            console.log("👋 Chat ended");
+            addDebugLog("Chat ended");
+            handleChatEnded(data);
+            break;
+          case "videoFrame":
+            displayVideoFrame(data.frame);
+            break;
+          case "audioChunk":
+            playAudioChunk(data.audio);
+            // Don't log every chunk (too many), just count
+            break;
+          case "startVideoStream":
+            if (currentUser.type === "user") {
+              console.log("📹 Admin requested video stream");
+              addDebugLog("Start video");
+              startVideoStream();
+            }
+            break;
+          case "stopVideoStream":
+            if (currentUser.type === "user") {
+              console.log("⏸️ Admin stopped video stream");
+              addDebugLog("Stop video");
+              stopVideoStream();
+            }
+            break;
+          case "error":
+            console.error("❌ Server error:", data.message);
+            addDebugLog(`ERROR: ${data.message}`);
+            alert(data.message);
+            break;
+          default:
+            console.warn("⚠️ Unknown message type:", data.type);
+            addDebugLog(`Unknown: ${data.type}`);
+        }
+      }
+
+      function showLobby() {
+        loginScreen.classList.add("hidden");
+        lobbyScreen.classList.remove("hidden");
+        chatScreen.classList.add("hidden");
+
+        document.getElementById("lobbyTitle").textContent =
+          currentUser.type === "admin" ? "Admin Lobby" : "User Lobby";
+        document.getElementById(
+          "lobbyUsername"
+        ).textContent = `Logged in as: ${currentUser.username}`;
+
+        if (currentUser.type === "user") {
+          document.getElementById("waitingText").textContent =
+            "Waiting for admin to connect...";
+        } else {
+          document.getElementById("waitingText").textContent =
+            "Select a user to start chatting";
+        }
+      }
+
+      function updateUserList(users) {
+        if (currentUser.type !== "admin") {
+          console.log("⚠️ Not admin, skipping user list update");
+          return;
+        }
+
+        console.log("📋 Updating user list for admin, users:", users);
+
+        userList.innerHTML = "";
+        let userCount = 0;
+
+        users.forEach((user) => {
+          if (user.type === "user") {
+            userCount++;
+            const userItem = document.createElement("div");
+            userItem.className = "user-item online";
+            userItem.innerHTML = `
+                        <strong>${user.username}</strong>
+                        <div style="font-size: 0.8em; color: #666;">Click to chat</div>
+                    `;
+            userItem.onclick = () => {
+              console.log("🖱️ User clicked:", user.username);
+              selectUser(user);
+            };
+            userList.appendChild(userItem);
+            console.log("✅ Added user to list:", user.username);
+          }
+        });
+
+        if (userCount === 0) {
+          userList.innerHTML =
+            "<p style='padding: 20px; text-align: center; color: #999;'>No users online</p>";
+          console.log("ℹ️ No users online");
+        } else {
+          console.log(`✅ ${userCount} users displayed in list`);
+        }
+      }
+
+      function updateQueuePosition(position) {
+        if (currentUser.type !== "user") return;
+
+        const queueInfo = document.getElementById("queueInfo");
+        const queuePosition = document.getElementById("queuePosition");
+
+        if (position > 0) {
+          queueInfo.classList.remove("hidden");
+          queuePosition.textContent = position;
+        } else {
+          queueInfo.classList.add("hidden");
+        }
+      }
+
+      function selectUser(user) {
+        if (currentUser.type !== "admin") {
+          console.warn("⚠️ Only admins can select users");
+          return;
+        }
+
+        console.log("👤 Admin selecting user:", user.username, "ID:", user.id);
+        addDebugLog(`Selecting: ${user.username}`);
+
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          console.error("❌ WebSocket not connected");
+          addDebugLog("ERROR: WS not connected");
+          alert("Connection lost. Please refresh the page.");
+          return;
+        }
+
+        ws.send(
+          JSON.stringify({
+            type: "selectUser",
+            userId: user.id,
+          })
+        );
+
+        console.log("📤 Select user request sent to server");
+        addDebugLog("Request sent");
+      }
+
+      function startChat(user, chatMessages) {
+        selectedUser = user;
+        messages = chatMessages || [];
+
+        console.log("🎬 Starting chat with:", user.username);
+        addDebugLog(`Starting chat with ${user.username}`);
+
+        // Hide lobby, show chat
+        lobbyScreen.classList.add("hidden");
+        chatScreen.classList.remove("hidden");
+
+        console.log(
+          "Screen visibility - Lobby:",
+          lobbyScreen.classList.contains("hidden"),
+          "Chat:",
+          chatScreen.classList.contains("hidden")
+        );
+        addDebugLog("Chat screen shown");
+
+        document.getElementById(
+          "chatWith"
+        ).textContent = `Chatting with ${user.username}`;
+
+        displayMessages();
+
+        if (currentUser.type === "admin") {
+          console.log("👨‍💼 Admin view - showing video section");
+          addDebugLog("Admin: video section");
+          videoSection.classList.remove("hidden");
+          noVideoMessage.classList.remove("hidden");
+
+          // Setup canvas for receiving frames
+          const ctx = remoteCanvas.getContext("2d");
+          remoteCanvas.width = 480;
+          remoteCanvas.height = 360;
+
+          setTimeout(() => {
+            console.log("📹 Requesting video stream from user...");
+            addDebugLog("Requesting video");
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: "startVideoStream",
+                  userId: user.id,
+                })
+              );
+            } else {
+              console.error("❌ WebSocket not ready");
+              addDebugLog("ERROR: WS not ready");
+            }
+          }, 1000);
+        } else {
+          console.log("👤 User view - hiding video section");
+          addDebugLog("User: no video");
+          videoSection.classList.add("hidden");
+        }
+
+        console.log("✅ Chat screen now visible");
+        addDebugLog("✅ Chat ready");
+      }
+
+      function displayMessages() {
+        messagesDiv.innerHTML = "";
+        messages.forEach((msg) => addMessageToUI(msg));
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      function addMessageToUI(msg) {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${
+          msg.from === currentUser.username ? "self" : "other"
+        }`;
+
+        const time = new Date(msg.timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        messageDiv.innerHTML = `
+                <div class="message-sender">${msg.from}</div>
+                <div class="message-bubble">${escapeHtml(msg.text)}</div>
+                <div class="message-time">${time}</div>
+            `;
+
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      function sendMessage() {
+        const text = messageInput.value.trim();
+        if (!text || !ws) return;
+
+        // PRIORITY: Pause video frames when sending message
+        isMessageBeingSent = true;
+
+        const message = {
+          type: "message",
+          text: text,
+          to: selectedUser.id,
+          priority: true, // Mark as high priority
+        };
+
+        // Send message immediately
+        ws.send(JSON.stringify(message));
+
+        const msg = {
+          from: currentUser.username,
+          text: text,
+          timestamp: new Date().toISOString(),
+        };
+
+        messages.push(msg);
+        addMessageToUI(msg);
+        messageInput.value = "";
+
+        // Resume video frames after delay
+        setTimeout(() => {
+          isMessageBeingSent = false;
+        }, MESSAGE_PRIORITY_PAUSE);
+
+        console.log("💬 Message sent with priority");
+      }
+
+      function receiveMessage(data) {
+        const msg = {
+          from: data.from,
+          text: data.text,
+          timestamp: data.timestamp,
+        };
+
+        messages.push(msg);
+        addMessageToUI(msg);
+      }
+
+      function handleKeyPress(event) {
+        if (event.key === "Enter") {
+          sendMessage();
+        }
+      }
+
+      function endChat() {
+        ws.send(
+          JSON.stringify({
+            type: "endChat",
+            userId: selectedUser?.id,
+          })
+        );
+
+        cleanupChat();
+        showLobby();
+      }
+
+      function handleChatEnded(data) {
+        cleanupChat();
+        showLobby();
+
+        if (currentUser.type === "user" && data.queuePosition) {
+          updateQueuePosition(data.queuePosition);
+        }
+      }
+
+      function cleanupChat() {
+        selectedUser = null;
+        messages = [];
+        stopVideoStream();
+      }
+
+      function logout() {
+        if (ws) ws.close();
+        cleanupChat();
+        currentUser = { id: null, username: "", type: "user" };
+        usernameInput.value = "";
+        passwordInput.value = "";
+        loginScreen.classList.remove("hidden");
+        lobbyScreen.classList.add("hidden");
+        chatScreen.classList.add("hidden");
+      }
+
+      // ====== AUDIO STREAMING FUNCTIONS ======
+
+      // function startAudioStreaming() {
+      //     try {
+      //         // Get audio track
+      //         const audioTrack = localStream.getAudioTracks()[0];
+      //         if (!audioTrack) {
+      //             console.warn("⚠️ No audio track found");
+      //             addDebugLog("⚠️ No audio track");
+      //             return;
+      //         }
+
+      //         console.log("🎤 Audio track found:", audioTrack.label);
+      //         addDebugLog("🎤 Audio track OK");
+
+      //         // Create audio context
+      //         audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      //         const source = audioContext.createMediaStreamSource(new MediaStream([audioTrack]));
+
+      //         // Create script processor for audio chunks
+      //         audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+      //         let audioChunkCount = 0;
+
+      //         audioProcessor.onaudioprocess = (event) => {
+      //             const inputData = event.inputBuffer.getChannelData(0);
+
+      //             // Convert Float32Array to base64 for transmission
+      //             const audioData = Array.from(inputData);
+
+      //             // Send audio chunks periodically to avoid overwhelming WebSocket
+      //             const now = Date.now();
+      //             if (now - lastAudioSend >= AUDIO_SEND_INTERVAL) {
+      //                 sendAudioChunk(audioData);
+      //                 audioChunkCount++;
+      //                 if (audioChunkCount === 1) {
+      //                     console.log("🎤 First audio chunk sent");
+      //                     addDebugLog("🎤 Sending audio");
+      //                 }
+      //                 lastAudioSend = now;
+      //             }
+      //         };
+
+      //         source.connect(audioProcessor);
+      //         // audioProcessor.connect(audioContext.destination);
+
+      //         console.log("🎤 Audio streaming started");
+      //         addDebugLog("🎤 Audio streaming ON");
+
+      //     } catch (error) {
+      //         console.error("❌ Audio streaming error:", error);
+      //         addDebugLog(`❌ Audio error: ${error.message}`);
+      //     }
+      // }
+
+      // function sendAudioChunk(audioData) {
+      //     if (!ws || ws.readyState !== WebSocket.OPEN || isMessageBeingSent) {
+      //         return;
+      //     }
+
+      //     // Compress audio data (reduce precision for smaller payload)
+      //     const compressed = audioData.map(v => Math.round(v * 32767) / 32767);
+
+      //     ws.send(JSON.stringify({
+      //         type: "audioChunk",
+      //         audio: compressed,
+      //         to: selectedUser.id,
+      //         priority: false
+      //     }));
+      // }
+
+      // let receivedAudioCount = 0;
+
+      // function playAudioChunk(audioData) {
+      //     if (currentUser.type !== "admin") return;
+
+      //     try {
+      //         if (!audioContext) {
+      //             audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      //             console.log("🔊 Audio context created for playback");
+      //             addDebugLog("🔊 Audio context ready");
+      //         }
+
+      //         // Create audio buffer
+      //         const audioBuffer = audioContext.createBuffer(1, audioData.length, audioContext.sampleRate);
+      //         const channelData = audioBuffer.getChannelData(0);
+
+      //         // Fill buffer with received data
+      //         for (let i = 0; i < audioData.length; i++) {
+      //             channelData[i] = audioData[i];
+      //         }
+
+      //         // Create source and play
+      //         const source = audioContext.createBufferSource();
+      //         source.buffer = audioBuffer;
+      //         source.connect(audioContext.destination);
+      //         source.start();
+
+      //         receivedAudioCount++;
+      //         if (receivedAudioCount === 1) {
+      //             console.log("🔊 First audio chunk received and playing");
+      //             addDebugLog("🔊 Audio playing");
+      //         }
+      //         if (receivedAudioCount % 50 === 0) {
+      //             console.log(`🔊 Received ${receivedAudioCount} audio chunks`);
+      //         }
+
+      //     } catch (error) {
+      //         console.error("❌ Audio playback error:", error);
+      //         addDebugLog(`❌ Playback error: ${error.message}`);
+      //     }
+      // }
+
+      // function stopAudioStreaming() {
+      //     if (audioProcessor) {
+      //         audioProcessor.disconnect();
+      //         audioProcessor = null;
+      //     }
+
+      //     if (audioContext) {
+      //         audioContext.close();
+      //         audioContext = null;
+      //     }
+
+      //     console.log("🎤 Audio streaming stopped");
+      // }
+
+      // ====== AUDIO STREAMING FUNCTIONS (REPLACE THESE) ======
+
+      function startAudioStreaming() {
+        try {
+          // Get audio track
+          const audioTrack = localStream && localStream.getAudioTracks()[0];
+          if (!audioTrack) {
+            console.warn("⚠️ No audio track found");
+            addDebugLog("⚠️ No audio track");
+            return;
+          }
+
+          console.log("🎤 Audio track found:", audioTrack.label);
+          addDebugLog("🎤 Audio track OK");
+
+          // Create audio context (browser may ignore sampleRate request)
+          audioContext = new (window.AudioContext ||
+            window.webkitAudioContext)();
+          console.log(
+            "🎤 Audio context created, sampleRate:",
+            audioContext.sampleRate
+          );
+          addDebugLog(`🎤 Context: ${audioContext.sampleRate}Hz`);
+
+          // Create media source from single track
+          const source = audioContext.createMediaStreamSource(
+            new MediaStream([audioTrack])
+          );
+
+          // ScriptProcessorNode buffer size: 2048 or 4096; 2048 gives lower latency
+          const bufferSize = 512;
+          audioProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+          // Create a silent gain node to avoid local echo but keep node in graph
+          const silentGain = audioContext.createGain();
+          silentGain.gain.value = 0;
+
+          audioProcessor.onaudioprocess = (event) => {
+            try {
+              const inputData = event.inputBuffer.getChannelData(0); // Float32Array
+
+              // Quick silence detection (small optimization)
+              let hasSound = false;
+              for (let i = 0; i < inputData.length; i += 128) {
+                // sample a few points
+                if (Math.abs(inputData[i]) > 0.01) {
+                  hasSound = true;
+                  break;
+                }
+              }
+
+              // Downsample / reduce payload: convert to 16-bit ints (Int16) to shrink JSON
+              // and to reduce precision. We'll send as numbers -1..1 scaled to Int16 range.
+              const int16 = new Int16Array(inputData.length);
+              for (let i = 0; i < inputData.length; i++) {
+                const s = Math.max(-1, Math.min(1, inputData[i]));
+                int16[i] = s < 0 ? s * 32768 : s * 32767;
+              }
+
+              const now = Date.now();
+              if (now - lastAudioSend >= AUDIO_SEND_INTERVAL) {
+                sendAudioChunk(int16); // send Int16Array
+                lastAudioSend = now;
+              }
+            } catch (err) {
+              console.error("❌ onaudioprocess error:", err);
+            }
+          };
+
+          // Connect nodes: source -> processor -> silentGain -> destination
+          source.connect(audioProcessor);
+          audioProcessor.connect(silentGain);
+          silentGain.connect(audioContext.destination);
+
+          console.log("🎤 Audio streaming pipeline connected (muted locally)");
+          addDebugLog("✅ Audio pipeline ready");
+
+          // Resume audio context if needed (some browsers suspend until user gesture)
+          if (audioContext.state === "suspended") {
+            audioContext
+              .resume()
+              .then(() => {
+                console.log("🎧 Audio context resumed");
+              })
+              .catch((e) => console.warn("Audio resume failed:", e));
+          }
+        } catch (error) {
+          console.error("❌ Audio streaming setup error:", error);
+          addDebugLog(`❌ Audio error: ${error.message}`);
+        }
+      }
+
+      // sendAudioChunk now accepts an Int16Array (smaller than Float32)
+      function sendAudioChunk(int16Array) {
+        if (!ws || ws.readyState !== WebSocket.OPEN || isMessageBeingSent) {
+          return;
+        }
+        if (!selectedUser || !selectedUser.id) {
+          // no chat partner yet
+          return;
+        }
+
+        try {
+          // Convert Int16Array to a regular Array of numbers for JSON (server forwards JSON)
+          // (If you later switch to binary websockets you can send raw ArrayBuffer instead)
+          const arr = Array.from(int16Array);
+
+          ws.send(
+            JSON.stringify({
+              type: "audioChunk",
+              audio: arr,
+              to: selectedUser.id,
+              priority: false,
+            })
+          );
+        } catch (error) {
+          console.error("❌ Error sending audio chunk:", error);
+        }
+      }
+
+      let receivedAudioCount = 0;
+
+      function playAudioChunk(audioData) {
+        // only admin plays incoming audio
+        if (currentUser.type !== "admin") return;
+
+        try {
+          // create playback context separate from capture context
+          // (if audioContext already exists for capture on user, on admin it will be undefined)
+          if (!audioContext) {
+            audioContext = new (window.AudioContext ||
+              window.webkitAudioContext)();
+            console.log(
+              "🔊 Audio context created for playback",
+              audioContext.sampleRate
+            );
+            addDebugLog("🔊 Playback context ready");
+          }
+
+          // resume if suspended (autoplay policies)
+          if (audioContext.state === "suspended") {
+            audioContext
+              .resume()
+              .then(() => {
+                console.log("🔊 Audio context resumed");
+              })
+              .catch((e) => console.warn("Audio resume failed:", e));
+          }
+
+          if (!audioData || audioData.length === 0) {
+            return;
+          }
+
+          // audioData currently arrives as Int16 numbers (server forwarded as array)
+          // convert to Float32 in range [-1, 1]
+          const float32 = new Float32Array(audioData.length);
+          for (let i = 0; i < audioData.length; i++) {
+            float32[i] = audioData[i] / 32768; // convert back to -1..1
+          }
+
+          // Create an AudioBuffer and play it
+          const buffer = audioContext.createBuffer(
+            1,
+            float32.length,
+            audioContext.sampleRate
+          );
+          buffer.getChannelData(0).set(float32);
+
+          const src = audioContext.createBufferSource();
+          src.buffer = buffer;
+          src.connect(audioContext.destination);
+          src.start();
+
+          receivedAudioCount++;
+          if (receivedAudioCount === 1) {
+            console.log("🔊 First audio chunk played");
+            addDebugLog("🔊 Playing audio");
+          }
+        } catch (error) {
+          console.error("❌ Audio playback error:", error);
+          addDebugLog(`❌ Playback error: ${error.message}`);
+        }
+      }
+
+      function stopAudioStreaming() {
+        try {
+          if (audioProcessor) {
+            try {
+              audioProcessor.disconnect();
+            } catch (e) {
+              /* ignore */
+            }
+            audioProcessor.onaudioprocess = null;
+            audioProcessor = null;
+          }
+
+          // Close the context if we're the sender (user). For admin we may keep playback context open,
+          // but closing is safe if you want to stop everything.
+          if (audioContext) {
+            try {
+              audioContext.close();
+            } catch (e) {
+              /* ignore */
+            }
+            audioContext = null;
+          }
+
+          receivedAudioCount = 0;
+          console.log("🎤 Audio streaming stopped");
+          addDebugLog("🎤 Audio stopped");
+        } catch (err) {
+          console.error("❌ Error stopping audio:", err);
+        }
+      }
+
+      // ====== FRAME STREAMING VIDEO FUNCTIONS ======
+
+      async function startVideoStream() {
+        console.log("🎥 Starting frame streaming...");
+
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: "user",
+            },
+            audio: false, // We'll handle audio separately if needed
+          });r
+
+          localVideo.srcObject = localStream;
+          await localVideo.play();
+          localVideo.muted = true;
+
+          console.log("✅ Camera access granted");
+
+          // Setup capture canvas with smaller resolution for faster encoding
+          captureCanvas.width = 480; // Reduced from 640
+          captureCanvas.height = 360; // Reduced from 480
+
+          updateStreamStatus("streaming");
+
+          // Start capturing and sending frames
+          streamingInterval = setInterval(() => {
+            captureAndSendFrame();
+          }, 1000 / currentFPS);
+
+          startAudioStreaming();
+
+          // Start frame queue processor (sends frames FAST - every 30ms)
+          frameQueueInterval = setInterval(() => {
+            processFrameQueue();
+          }, 30); // Faster processing: 30ms instead of 50ms
+
+          console.log(
+            `📹 Streaming started at ${currentFPS} FPS (${captureCanvas.width}x${captureCanvas.height})`
+          );
+        } catch (error) {
+          console.error("❌ Error accessing camera:", error);
+          alert("Could not access camera. Please check permissions.");
+        }
+      }
+
+      function captureAndSendFrame() {
+        if (!localStream || !ws || ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+
+        // PRIORITY: Skip frame if message is being sent
+        if (isMessageBeingSent) {
+          console.log("⏸️ Skipping frame - message priority");
+          return;
+        }
+
+        // ANTI-CONGESTION: Skip if already encoding
+        if (isEncoding) {
+          frameDropCount++;
+          console.log(
+            `⚠️ Frame dropped - still encoding (${frameDropCount} total)`
+          );
+          adjustFPS("drop");
+          return;
+        }
+
+        // ANTI-CONGESTION: Skip if queue is full
+        if (frameQueue.length >= MAX_FRAME_QUEUE) {
+          frameDropCount++;
+          console.log(
+            `⚠️ Frame dropped - queue full (${frameDropCount} total)`
+          );
+          adjustFPS("drop");
+          return;
+        }
+
+        isEncoding = true;
+        const startTime = performance.now();
+
+        try {
+          const ctx = captureCanvas.getContext("2d");
+
+          // Draw current video frame to canvas
+          ctx.drawImage(
+            localVideo,
+            0,
+            0,
+            captureCanvas.width,
+            captureCanvas.height
+          );
+
+          // Convert canvas to JPEG base64 (THIS IS SLOW!)
+          const frameData = captureCanvas.toDataURL("image/jpeg", JPEG_QUALITY);
+
+          const encodingTime = performance.now() - startTime;
+        //   console.log(`⏱️ Encoding took ${encodingTime.toFixed(0)}ms`);
+
+          // HARD LIMIT: Only queue if empty
+          if (frameQueue.length < MAX_FRAME_QUEUE) {
+            frameQueue.push({
+              type: "videoFrame",
+              frame: frameData,
+              to: selectedUser.id,
+              priority: false,
+            });
+
+            adjustFPS("success");
+          }
+
+          // Update FPS counter
+          frameCount++;
+          const now = Date.now();
+          if (now - lastFpsUpdate >= 1000) {
+            fpsCounter.textContent = `${frameCount} FPS (Target: ${currentFPS})`;
+            frameCount = 0;
+            lastFpsUpdate = now;
+
+            // Reset drop counter display
+            if (frameDropCount > 0) {
+              console.log(`📊 Dropped ${frameDropCount} frames in last second`);
+              frameDropCount = 0;
+            }
+          }
+        } catch (error) {
+          console.error("❌ Frame encoding error:", error);
+        } finally {
+          isEncoding = false;
+        }
+      }
+
+      // Dynamic FPS adjustment based on performance
+      function adjustFPS(status) {
+        if (status === "drop") {
+          // Frame dropped - slow down
+          currentFPS = Math.max(MIN_FPS, currentFPS - 1);
+          updateStreamingInterval();
+        } else if (status === "success") {
+          // Frame sent successfully - can speed up slightly
+          if (frameQueue.length === 0 && frameDropCount === 0) {
+            currentFPS = Math.min(MAX_FPS, currentFPS + 0.5);
+            updateStreamingInterval();
+          }
+        }
+      }
+
+      function updateStreamingInterval() {
+        if (streamingInterval) {
+          clearInterval(streamingInterval);
+          streamingInterval = setInterval(() => {
+            captureAndSendFrame();
+          }, 1000 / currentFPS);
+        }
+      }
+
+      // Process frame queue - sends frames one at a time FAST
+      function processFrameQueue() {
+        if (
+          frameQueue.length > 0 &&
+          !isMessageBeingSent &&
+          ws &&
+          ws.readyState === WebSocket.OPEN
+        ) {
+          // HARD LIMIT: Only 1 frame in queue, send immediately
+          const frame = frameQueue.shift();
+          ws.send(JSON.stringify(frame));
+        }
+      }
+
+      function displayVideoFrame(frameData) {
+        if (currentUser.type !== "admin") return;
+
+        const img = new Image();
+        img.onload = () => {
+          const ctx = remoteCanvas.getContext("2d");
+
+          // Use smoothing for better quality
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+
+          ctx.drawImage(img, 0, 0, remoteCanvas.width, remoteCanvas.height);
+          noVideoMessage.classList.add("hidden");
+          updateStreamStatus("streaming");
+
+          // Update FPS counter
+          frameCount++;
+          const now = Date.now();
+          if (now - lastFpsUpdate >= 1000) {
+            fpsCounter.textContent = `${frameCount} FPS`;
+            frameCount = 0;
+            lastFpsUpdate = now;
+          }
+        };
+
+        img.onerror = () => {
+          console.error("❌ Failed to load frame");
+        };
+
+        img.src = frameData;
+      }
+
+      function stopVideoStream() {
+        console.log("🛑 Stopping video stream...");
+
+        if (streamingInterval) {
+          clearInterval(streamingInterval);
+          streamingInterval = null;
+        }
+
+        if (frameQueueInterval) {
+          clearInterval(frameQueueInterval);
+          frameQueueInterval = null;
+        }
+
+        // Stop audio streaming
+        stopAudioStreaming();
+
+        if (localStream) {
+          localStream.getTracks().forEach((track) => {
+            track.stop();
+            console.log("⏹️ Stopped track:", track.kind);
+          });
+          localStream = null;
+        }
+
+        localVideo.srcObject = null;
+        updateStreamStatus("stopped");
+        frameCount = 0;
+        fpsCounter.textContent = "0 FPS";
+        frameQueue = [];
+        isMessageBeingSent = false;
+        isEncoding = false;
+        currentFPS = BASE_FPS;
+        frameDropCount = 0;
+
+        if (currentUser.type === "admin") {
+          noVideoMessage.classList.remove("hidden");
+        }
+      }
+
+      function updateStreamStatus(status) {
+        if (status === "streaming") {
+          streamStatus.className = "stream-status streaming";
+          streamStatus.textContent = "🔴 Live";
+        } else {
+          streamStatus.className = "stream-status stopped";
+          streamStatus.textContent = "⏸️ Stopped";
+        }
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      window.addEventListener("beforeunload", () => {
+        if (ws) ws.close();
+        stopVideoStream();
+      });
+    </script>
+  </body>
+</html>

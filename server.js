@@ -15,81 +15,47 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const clients = new Map();
-let adminClient = null;
-const userQueue = [];
-const activeChats = new Map();
-const chatHistory = new Map();
-const messageQueues = new Map(); // Separate queues for priority handling
+const rooms = new Map(); // roomId -> { admin, users: [], chats: Map() }
+const clients = new Map(); // clientId -> { ws, username, type, roomId }
 
-function generateId() {
+function generateRoomId() {
+    return Math.random().toString(36).substring(2, 10);
+}
+
+function generateClientId() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
 function sendToClient(clientId, message) {
     const client = clients.get(clientId);
     if (client && client.ws.readyState === WebSocket.OPEN) {
-        // Priority messages (chat, chatStarted) sent immediately
-        if (message.priority === true) {
-            client.ws.send(JSON.stringify(message));
-            console.log(`💬 Priority message sent to ${clientId}: ${message.type}`);
-        } else {
-            // Low priority messages (video frames) queued
-            if (!messageQueues.has(clientId)) {
-                messageQueues.set(clientId, []);
-            }
-            const queue = messageQueues.get(clientId);
-            
-            // HARD LIMIT: Only 1 frame in queue
-            if (queue.length >= 1) {
-                queue.shift(); // Remove oldest frame immediately
-            }
-            
-            queue.push(message);
-        }
-    } else {
-        console.warn(`⚠️ Cannot send to ${clientId}: WebSocket not open`);
+        client.ws.send(JSON.stringify(message));
     }
 }
 
-// Process message queues FAST for all clients
-function processMessageQueues() {
-    messageQueues.forEach((queue, clientId) => {
-        const client = clients.get(clientId);
-        if (client && client.ws.readyState === WebSocket.OPEN && queue.length > 0) {
-            const message = queue.shift();
-            client.ws.send(JSON.stringify(message));
-        }
+function getRoomUsers(roomId) {
+    const room = rooms.get(roomId);
+    if (!room) return [];
+    
+    return room.users.map(userId => {
+        const client = clients.get(userId);
+        return {
+            id: userId,
+            username: client.username,
+            type: client.type,
+            inChat: room.activeChats.has(userId)
+        };
     });
 }
 
-// Process queues every 50ms (faster than before)
-setInterval(processMessageQueues, 50);
+function updateAdminUserList(roomId) {
+    const room = rooms.get(roomId);
+    if (!room || !room.admin) return;
 
-function updateUserList() {
-    if (!adminClient) return;
-
-    const userList = Array.from(clients.values())
-        .filter(c => c.type === 'user')
-        .map(c => ({
-            id: c.id,
-            username: c.username,
-            type: c.type,
-            inChat: activeChats.has(c.id)
-        }));
-
-    sendToClient(adminClient.id, {
+    const userList = getRoomUsers(roomId);
+    sendToClient(room.admin, {
         type: 'userList',
         users: userList
-    });
-}
-
-function updateQueue() {
-    userQueue.forEach((userId, index) => {
-        sendToClient(userId, {
-            type: 'queuePosition',
-            position: index + 1
-        });
     });
 }
 
@@ -114,11 +80,14 @@ wss.on('connection', (ws) => {
     });
 
     function handleMessage(ws, data) {
-        console.log('Received message type:', data.type);
+        console.log('📨 Received:', data.type);
         
         switch (data.type) {
-            case 'join':
-                handleJoin(ws, data);
+            case 'createRoom':
+                handleCreateRoom(ws, data);
+                break;
+            case 'joinRoom':
+                handleJoinRoom(ws, data);
                 break;
             case 'selectUser':
                 handleSelectUser(data);
@@ -129,141 +98,163 @@ wss.on('connection', (ws) => {
             case 'endChat':
                 handleEndChat(data);
                 break;
-            case 'startVideoStream':
-                handleStartVideoStream(data);
+            case 'webrtc-offer':
+                handleWebRTCOffer(data);
                 break;
-            case 'stopVideoStream':
-                handleStopVideoStream(data);
+            case 'webrtc-answer':
+                handleWebRTCAnswer(data);
                 break;
-            case 'videoFrame':
-                handleVideoFrame(data);
-                break;
-            case 'audioChunk':
-                handleAudioChunk(data);
+            case 'webrtc-ice':
+                handleWebRTCIce(data);
                 break;
             default:
                 console.log('Unknown message type:', data.type);
         }
     }
 
-    function handleJoin(ws, data) {
-        clientId = generateId();
+    function handleCreateRoom(ws, data) {
+        const ADMIN_PASSWORD = 'admin123';
+        
+        if (data.password !== ADMIN_PASSWORD) {
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: 'Incorrect admin password'
+            }));
+            return;
+        }
 
-        const client = {
-            id: clientId,
+        const roomId = generateRoomId();
+        clientId = generateClientId();
+
+        // Create room
+        rooms.set(roomId, {
+            admin: clientId,
+            users: [],
+            activeChats: new Map(),
+            chatHistory: new Map()
+        });
+
+        // Create client
+        clients.set(clientId, {
             ws: ws,
             username: data.username,
-            type: data.userType
-        };
+            type: 'admin',
+            roomId: roomId
+        });
 
-        clients.set(clientId, client);
+        // Send room URL to admin
+        const roomUrl = `${data.origin || 'http://localhost:' + PORT}?room=${roomId}`;
+        
+        ws.send(JSON.stringify({
+            type: 'roomCreated',
+            userId: clientId,
+            roomId: roomId,
+            roomUrl: roomUrl
+        }));
+
+        console.log(`✅ Admin ${data.username} created room: ${roomId}`);
+        console.log(`🔗 Room URL: ${roomUrl}`);
+    }
+
+    function handleJoinRoom(ws, data) {
+        const roomId = data.roomId;
+        const room = rooms.get(roomId);
+
+        if (!room) {
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: 'Room not found'
+            }));
+            return;
+        }
+
+        clientId = generateClientId();
+
+        // Add user to room
+        room.users.push(clientId);
+
+        // Create client
+        clients.set(clientId, {
+            ws: ws,
+            username: data.username,
+            type: 'user',
+            roomId: roomId
+        });
 
         ws.send(JSON.stringify({
             type: 'welcome',
-            userId: clientId
+            userId: clientId,
+            roomId: roomId
         }));
 
-        if (data.userType === 'admin') {
-            if (adminClient) {
-                ws.send(JSON.stringify({
-                    type: 'error',
-                    message: 'An admin is already connected'
-                }));
-                ws.close();
-                return;
-            }
-            adminClient = client;
-            console.log(`✅ Admin ${data.username} connected`);
-            updateUserList();
-        } else {
-            console.log(`✅ User ${data.username} connected`);
-            
-            if (adminClient) {
-                userQueue.push(clientId);
-                updateQueue();
-                updateUserList();
-            } else {
-                ws.send(JSON.stringify({
-                    type: 'queuePosition',
-                    position: 0
-                }));
-            }
-        }
+        console.log(`✅ User ${data.username} joined room: ${roomId}`);
+
+        // Notify admin of new user
+        updateAdminUserList(roomId);
     }
 
     function handleSelectUser(data) {
-        if (!adminClient || clients.get(clientId)?.type !== 'admin') {
-            console.log('⚠️ Non-admin tried to select user');
-            return;
-        }
+        const admin = clients.get(clientId);
+        if (!admin || admin.type !== 'admin') return;
+
+        const roomId = admin.roomId;
+        const room = rooms.get(roomId);
+        if (!room) return;
 
         const userId = data.userId;
         const user = clients.get(userId);
 
-        console.log(`👨‍💼 Admin selecting user: ${userId}`);
-        console.log(`👤 User found:`, user ? user.username : 'NOT FOUND');
-
         if (!user || user.type !== 'user') {
-            console.error(`❌ User not found: ${userId}`);
             sendToClient(clientId, {
                 type: 'error',
-                message: 'User not found',
-                priority: true
+                message: 'User not found'
             });
             return;
         }
 
-        const queueIndex = userQueue.indexOf(userId);
-        if (queueIndex > -1) {
-            userQueue.splice(queueIndex, 1);
-            console.log(`✅ Removed user from queue position ${queueIndex}`);
-        }
+        // Set active chat
+        room.activeChats.set(userId, clientId);
+        room.activeChats.set(clientId, userId);
 
-        activeChats.set(userId, adminClient.id);
-        activeChats.set(adminClient.id, userId);
-        console.log(`✅ Active chat created: Admin ↔ ${user.username}`);
-
-        const chatKey = `${adminClient.id}-${userId}`;
-        const messages = chatHistory.get(chatKey) || [];
+        const chatKey = `${clientId}-${userId}`;
+        const messages = room.chatHistory.get(chatKey) || [];
 
         // Send to ADMIN
-        console.log(`📤 Sending chatStarted to admin`);
-        sendToClient(adminClient.id, {
+        sendToClient(clientId, {
             type: 'chatStarted',
             with: {
                 id: userId,
                 username: user.username,
                 type: user.type
             },
-            messages: messages,
-            priority: true
+            messages: messages
         });
 
         // Send to USER
-        console.log(`📤 Sending chatStarted to user: ${user.username}`);
         sendToClient(userId, {
             type: 'chatStarted',
             with: {
-                id: adminClient.id,
-                username: adminClient.username,
-                type: adminClient.type
+                id: clientId,
+                username: admin.username,
+                type: admin.type
             },
-            messages: messages,
-            priority: true
+            messages: messages
         });
 
-        updateQueue();
-        updateUserList();
-        console.log(`✅ Chat started successfully`);
+        updateAdminUserList(roomId);
+        console.log(`✅ Chat started: ${admin.username} ↔ ${user.username}`);
     }
 
     function handleChatMessage(data) {
         const fromClient = clients.get(clientId);
         if (!fromClient) return;
 
+        const roomId = fromClient.roomId;
+        const room = rooms.get(roomId);
+        if (!room) return;
+
         const toId = data.to;
         const toClient = clients.get(toId);
-
         if (!toClient) return;
 
         const message = {
@@ -272,6 +263,7 @@ wss.on('connection', (ws) => {
             timestamp: new Date().toISOString()
         };
 
+        // Save to history
         let chatKey;
         if (fromClient.type === 'admin') {
             chatKey = `${clientId}-${toId}`;
@@ -279,127 +271,82 @@ wss.on('connection', (ws) => {
             chatKey = `${toId}-${clientId}`;
         }
 
-        if (!chatHistory.has(chatKey)) {
-            chatHistory.set(chatKey, []);
+        if (!room.chatHistory.has(chatKey)) {
+            room.chatHistory.set(chatKey, []);
         }
-        chatHistory.get(chatKey).push(message);
+        room.chatHistory.get(chatKey).push(message);
 
-        // Send with priority flag
+        // Send to recipient
         sendToClient(toId, {
             type: 'message',
             from: fromClient.username,
             text: data.text,
-            timestamp: message.timestamp,
-            priority: true // HIGH PRIORITY - send immediately
+            timestamp: message.timestamp
         });
 
-        console.log(`💬 Message from ${fromClient.username} to ${toClient.username}`);
+        console.log(`💬 Message: ${fromClient.username} → ${toClient.username}`);
     }
 
     function handleEndChat(data) {
         const fromClient = clients.get(clientId);
         if (!fromClient) return;
 
+        const roomId = fromClient.roomId;
+        const room = rooms.get(roomId);
+        if (!room) return;
+
         let otherUserId;
         if (fromClient.type === 'admin') {
             otherUserId = data.userId;
         } else {
-            otherUserId = activeChats.get(clientId);
+            otherUserId = room.activeChats.get(clientId);
         }
 
-        activeChats.delete(clientId);
-        activeChats.delete(otherUserId);
+        // Clear active chats
+        room.activeChats.delete(clientId);
+        room.activeChats.delete(otherUserId);
 
         if (otherUserId) {
-            const otherClient = clients.get(otherUserId);
-            if (otherClient) {
-                // Stop video stream
-                sendToClient(otherUserId, {
-                    type: 'stopVideoStream'
-                });
-
-                if (otherClient.type === 'user') {
-                    userQueue.push(otherUserId);
-                    sendToClient(otherUserId, {
-                        type: 'chatEnded',
-                        queuePosition: userQueue.length
-                    });
-                } else {
-                    sendToClient(otherUserId, {
-                        type: 'chatEnded'
-                    });
-                }
-            }
-        }
-
-        updateQueue();
-        updateUserList();
-    }
-
-    function handleStartVideoStream(data) {
-        if (clients.get(clientId)?.type !== 'admin') {
-            return;
-        }
-
-        const userId = data.userId;
-        console.log(`📹 Admin requesting video stream from user ${userId}`);
-        
-        sendToClient(userId, {
-            type: 'startVideoStream'
-        });
-    }
-
-    function handleStopVideoStream(data) {
-        if (clients.get(clientId)?.type !== 'admin') {
-            return;
-        }
-
-        const userId = data.userId;
-        console.log(`⏸️ Admin stopping video stream from user ${userId}`);
-        
-        sendToClient(userId, {
-            type: 'stopVideoStream'
-        });
-    }
-
-    function handleVideoFrame(data) {
-        const fromClient = clients.get(clientId);
-        if (!fromClient || fromClient.type !== 'user') {
-            return;
-        }
-
-        const toId = data.to;
-        
-        // Forward the frame to admin (low priority)
-        if (toId && clients.has(toId)) {
-            sendToClient(toId, {
-                type: 'videoFrame',
-                frame: data.frame,
-                from: clientId,
-                priority: false // LOW PRIORITY - queued
+            sendToClient(otherUserId, {
+                type: 'chatEnded'
             });
         }
+
+        updateAdminUserList(roomId);
     }
 
-    function handleAudioChunk(data) {
-        const fromClient = clients.get(clientId);
-        if (!fromClient || fromClient.type !== 'user') {
-            return;
-        }
-
+    function handleWebRTCOffer(data) {
         const toId = data.to;
-        
-        // Forward the audio to admin (medium priority - faster than video)
-        if (toId && clients.has(toId)) {
-            const client = clients.get(toId);
-            if (client && client.ws.readyState === WebSocket.OPEN) {
-                // Send audio directly (bypass queue for better audio quality)
-                client.ws.send(JSON.stringify({
-                    type: 'audioChunk',
-                    audio: data.audio,
-                    from: clientId
-                }));
-            }
+        if (clients.has(toId)) {
+            sendToClient(toId, {
+                type: 'webrtc-offer',
+                offer: data.offer,
+                from: clientId
+            });
+            console.log(`🔄 WebRTC offer: ${clientId} → ${toId}`);
+        }
+    }
+
+    function handleWebRTCAnswer(data) {
+        const toId = data.to;
+        if (clients.has(toId)) {
+            sendToClient(toId, {
+                type: 'webrtc-answer',
+                answer: data.answer,
+                from: clientId
+            });
+            console.log(`🔄 WebRTC answer: ${clientId} → ${toId}`);
+        }
+    }
+
+    function handleWebRTCIce(data) {
+        const toId = data.to;
+        if (clients.has(toId)) {
+            sendToClient(toId, {
+                type: 'webrtc-ice',
+                candidate: data.candidate,
+                from: clientId
+            });
         }
     }
 });
@@ -412,51 +359,41 @@ function handleDisconnect(clientId) {
 
     console.log(`❌ ${client.username} disconnected`);
 
-    // Clean up message queue
-    messageQueues.delete(clientId);
+    const roomId = client.roomId;
+    const room = rooms.get(roomId);
 
-    if (client.type === 'admin') {
-        adminClient = null;
-
-        activeChats.forEach((partnerId, userId) => {
-            if (userId !== clientId) {
+    if (room) {
+        if (client.type === 'admin') {
+            // Admin left - notify all users and close room
+            room.users.forEach(userId => {
                 sendToClient(userId, {
-                    type: 'stopVideoStream'
+                    type: 'roomClosed',
+                    message: 'Admin left the room'
                 });
-                sendToClient(userId, {
+            });
+
+            // Clean up room
+            rooms.delete(roomId);
+            console.log(`🗑️ Room ${roomId} closed`);
+        } else {
+            // User left - remove from room
+            const userIndex = room.users.indexOf(clientId);
+            if (userIndex > -1) {
+                room.users.splice(userIndex, 1);
+            }
+
+            // End active chat
+            const partnerId = room.activeChats.get(clientId);
+            if (partnerId) {
+                room.activeChats.delete(clientId);
+                room.activeChats.delete(partnerId);
+                sendToClient(partnerId, {
                     type: 'chatEnded'
                 });
             }
-        });
 
-        activeChats.clear();
-        userQueue.length = 0;
-
-        clients.forEach((c, id) => {
-            if (c.type === 'user' && id !== clientId) {
-                sendToClient(id, {
-                    type: 'queuePosition',
-                    position: 0
-                });
-            }
-        });
-    } else {
-        const queueIndex = userQueue.indexOf(clientId);
-        if (queueIndex > -1) {
-            userQueue.splice(queueIndex, 1);
-            updateQueue();
+            updateAdminUserList(roomId);
         }
-
-        const partnerId = activeChats.get(clientId);
-        if (partnerId) {
-            activeChats.delete(clientId);
-            activeChats.delete(partnerId);
-            sendToClient(partnerId, {
-                type: 'chatEnded'
-            });
-        }
-
-        updateUserList();
     }
 
     clients.delete(clientId);
@@ -465,6 +402,6 @@ function handleDisconnect(clientId) {
 server.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`✅ WebSocket server ready`);
-    console.log(`✅ Frame streaming enabled`);
+    console.log(`🎥 WebRTC signaling enabled`);
     console.log(`🌐 Access at http://localhost:${PORT}`);
 });
